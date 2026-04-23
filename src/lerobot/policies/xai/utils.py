@@ -28,12 +28,14 @@ def attention_entropy(attn_map_1d: torch.Tensor) -> float:
     Lower entropy = more focused attention.
 
     Args:
-        attn_map_1d: Attention weights [num_tokens] summing to 1.
+        attn_map_1d: Attention weights [num_tokens]. Does not need to sum to 1.
+            Will be normalized internally.
 
     Returns:
         Entropy value. Max entropy when uniform distribution.
     """
-    p = F.softmax(attn_map_1d, dim=-1)
+    # Normalize to get proper probability distribution
+    p = attn_map_1d / (attn_map_1d.sum() + 1e-8)
     entropy = -(p * (p + 1e-8).log()).sum().item()
     return entropy
 

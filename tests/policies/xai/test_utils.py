@@ -39,14 +39,14 @@ class TestAttentionEntropy:
         assert entropy < 0.2
 
     def test_two_spot_attention(self):
-        """Two equal spots = moderate entropy."""
+        """Two equal spots = low entropy (concentrated on 2 tokens)."""
         two_spot = torch.zeros(196)
         two_spot[0] = 5.0
-        two_spot[1] = 5.0  # Equal values -> equal probabilities after softmax
+        two_spot[1] = 5.0  # Equal values -> equal weight after normalization
         entropy = attention_entropy(two_spot)
-        # With 2 equal high values, softmax gives ~0.3 to each, rest get ~0.002
-        # entropy ≈ 3.2 (higher because distribution is less peaked)
-        assert 2.5 < entropy < 4.0
+        # With 2 equal values (50% each after normalization):
+        # H = -2 * 0.5 * log(0.5) = log(2) ≈ 0.693
+        assert 0.5 < entropy < 1.0
 
     def test_gradually_focused(self):
         """Test entropy decreases as attention becomes more focused."""

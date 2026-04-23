@@ -64,12 +64,9 @@ class WandBConfig:
 @dataclass
 class EvalConfig:
     n_episodes: int = 50
-    # `batch_size` specifies the number of environments to use in a gym.vector.VectorEnv.
-    # Set to 0 for auto-tuning based on available CPU cores and n_episodes.
     batch_size: int = 0
-    # `use_async_envs` specifies whether to use asynchronous environments (multiprocessing).
-    # Defaults to True; automatically downgraded to SyncVectorEnv when batch_size=1.
     use_async_envs: bool = True
+    use_xai: bool = False
 
     def __post_init__(self) -> None:
         if self.batch_size == 0:

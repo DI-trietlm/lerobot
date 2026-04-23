@@ -82,6 +82,7 @@ from lerobot.envs import (
     preprocess_observation,
 )
 from lerobot.policies import PreTrainedPolicy, make_policy, make_pre_post_processors
+from lerobot.policies.xai import XAIPipeline, XAIConfig
 from lerobot.processor import PolicyProcessorPipeline
 from lerobot.types import PolicyAction
 from lerobot.utils.constants import ACTION, DONE, OBS_STR, REWARD
@@ -273,6 +274,7 @@ def eval_policy(
     videos_dir: Path | None = None,
     return_episode_data: bool = False,
     start_seed: int | None = None,
+    xai_pipeline: XAIPipeline | None = None,
 ) -> dict:
     """
     Args:
@@ -305,6 +307,10 @@ def eval_policy(
 
     start = time.time()
     policy.eval()
+
+    # Store XAI buffers for each episode
+    xai_episode_buffers: dict[str, Any] = {}
+    episode_index = 0
 
     # Determine how many batched rollouts we need to get n_episodes. Note that if n_episodes is not evenly
     # divisible by env.num_envs we end up discarding some data in the last batch.
@@ -548,6 +554,22 @@ def eval_main(cfg: EvalPipelineConfig):
 
     policy.eval()
 
+    # Initialize XAI pipeline if enabled
+    xai_pipeline = None
+    if cfg.eval.use_xai:
+        try:
+            xai_config = XAIConfig(
+                use_p0_v_attention=True,
+                use_p1_a_denoising=True,
+                use_p3_rtc_smoothness=True,
+            )
+            xai_pipeline = XAIPipeline(policy, xai_config)
+            policy = xai_pipeline.wrap_policy(policy)
+            logging.info("XAI pipeline initialized with real-time methods enabled.")
+        except Exception as e:
+            logging.warning(f"Failed to initialize XAI pipeline: {e}")
+            xai_pipeline = None
+
     # The inference device is automatically set to match the detected hardware, overriding any previous device settings from training to ensure compatibility.
     preprocessor_overrides = {
         "device_processor": {"device": str(policy.config.device)},
@@ -576,6 +598,7 @@ def eval_main(cfg: EvalPipelineConfig):
             videos_dir=Path(cfg.output_dir) / "videos",
             start_seed=cfg.seed,
             max_parallel_tasks=cfg.env.max_parallel_tasks,
+            xai_pipeline=xai_pipeline,
         )
         print("Overall Aggregated Metrics:")
         print(info["overall"])
@@ -618,6 +641,7 @@ def eval_one(
     videos_dir: Path | None,
     return_episode_data: bool,
     start_seed: int | None,
+    xai_pipeline: XAIPipeline | None = None,
 ) -> TaskMetrics:
     """Evaluates one task_id of one suite using the provided vec env."""
 
@@ -635,6 +659,7 @@ def eval_one(
         videos_dir=task_videos_dir,
         return_episode_data=return_episode_data,
         start_seed=start_seed,
+        xai_pipeline=xai_pipeline,
     )
 
     per_episode = task_result["per_episode"]
@@ -661,6 +686,7 @@ def run_one(
     videos_dir: Path | None,
     return_episode_data: bool,
     start_seed: int | None,
+    xai_pipeline: XAIPipeline | None = None,
 ):
     """
     Run eval_one for a single (task_group, task_id, env).
@@ -685,6 +711,7 @@ def run_one(
         videos_dir=task_videos_dir,
         return_episode_data=return_episode_data,
         start_seed=start_seed,
+        xai_pipeline=xai_pipeline,
     )
     # ensure we always provide video_paths key to simplify accumulation
     if max_episodes_rendered > 0:
@@ -706,6 +733,7 @@ def eval_policy_all(
     return_episode_data: bool = False,
     start_seed: int | None = None,
     max_parallel_tasks: int = 1,
+    xai_pipeline: XAIPipeline | None = None,
 ) -> dict:
     """
     Evaluate a nested `envs` dict: {task_group: {task_id: vec_env}}.
@@ -761,6 +789,7 @@ def eval_policy_all(
         videos_dir=videos_dir,
         return_episode_data=return_episode_data,
         start_seed=start_seed,
+        xai_pipeline=xai_pipeline,
     )
 
     if max_parallel_tasks <= 1:

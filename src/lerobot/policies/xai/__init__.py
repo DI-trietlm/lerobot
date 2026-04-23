@@ -28,5 +28,6 @@ This module provides 7 XAI methods for analyzing policy behavior:
 from .buffer import EpisodeXAIBuffer, StepRecord
 from .config import XAIConfig
 from .methods.base import XAIMethod
+from .pipeline import XAIPipeline
 
-__all__ = ["XAIConfig", "StepRecord", "EpisodeXAIBuffer", "XAIMethod"]
+__all__ = ["XAIConfig", "StepRecord", "EpisodeXAIBuffer", "XAIMethod", "XAIPipeline"]

@@ -24,6 +24,7 @@ python -m lerobot.rtc_inference.policy_server \
 ```
 """
 
+import json
 import logging
 import math
 import pickle  # nosec
@@ -36,6 +37,8 @@ from pathlib import Path
 from pprint import pformat
 from queue import Empty, Queue
 from typing import Any
+
+import numpy as np
 
 import draccus
 import grpc
@@ -156,6 +159,11 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         self.policy = None
         self.preprocessor: PolicyProcessorPipeline[dict[str, Any], dict[str, Any]] | None = None
         self.postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction] | None = None
+
+        # Attention capture state (optional, X-VLA only)
+        self.capture_attn_enable = False
+        self.capture_attn_dir = "attention_captures"
+        self._attn_timestep = 0
 
         # RTC state (optional)
         self.rtc_enabled = False
@@ -298,6 +306,12 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         self.rtc_inference_delay_steps = getattr(policy_specs, "inference_delay_steps", None)
         self.image_compress_enable = bool(getattr(policy_specs, "image_compress_enable", False))
         self.image_compress_quality = int(getattr(policy_specs, "image_compress_quality", 90))
+        self.capture_attn_enable = bool(getattr(policy_specs, "capture_attn_enable", False))
+        self.capture_attn_dir = str(getattr(policy_specs, "capture_attn_dir", "attention_captures"))
+        self._attn_timestep = 0
+        if self.capture_attn_enable:
+            Path(self.capture_attn_dir).mkdir(parents=True, exist_ok=True)
+            self.logger.info(f"Attention capture enabled → {Path(self.capture_attn_dir).resolve()}")
 
         policy_class = get_policy_class(self.policy_type)
 
@@ -728,6 +742,82 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
 
         return chunk[:, : self.actions_per_chunk, :]
 
+    def _save_attention_data(self, raw_obs: dict, captured, timestep: int) -> None:
+        """Save observation images + attention weights for one inference step.
+
+        Directory layout:
+            {capture_attn_dir}/{timestep:06d}/
+                {camera_key}.png          ← raw observation images
+                attn_florence2_layer{i:02d}.npy      ← Stage 1 & 2 weights [B,H,T,T] float16
+                attn_soft_transformer_layer{i:02d}.npy  ← Stage 3 weights [B,H,T,T] float16
+                meta.json                 ← token boundary info
+        """
+        import cv2
+
+        root = Path(self.capture_attn_dir) / f"{timestep:06d}"
+        root.mkdir(parents=True, exist_ok=True)
+
+        # Determine model input size for correct spatial alignment with attention weights
+        resize_cfg = None
+        try:
+            resize_cfg = self.policy.config.resize_imgs_with_padding  # (H, W) or None
+        except AttributeError:
+            pass
+
+        meta_images: dict = {}
+        aux_idx = 0
+
+        # Save observation images resized to model input size
+        for key, val in raw_obs.items():
+            if "image" not in key and "camera" not in key:
+                continue
+            try:
+                if hasattr(val, "numpy"):
+                    frame = val.numpy()
+                elif isinstance(val, np.ndarray):
+                    frame = val
+                else:
+                    continue
+
+                # Resize to model input size so pixel grid aligns with attention tokens
+                if resize_cfg is not None:
+                    import torch
+                    from lerobot.policies.xvla.modeling_xvla import resize_with_pad
+                    target_h, target_w = resize_cfg
+                    frame_t = torch.from_numpy(frame.astype(np.float32)).permute(2, 0, 1).unsqueeze(0)
+                    frame_t = resize_with_pad(frame_t, target_h, target_w)
+                    frame = frame_t.squeeze(0).permute(1, 2, 0).clamp(0, 255).byte().numpy()
+
+                # Determine camera role from rename_map so visualizer loads the right image
+                model_key = self.rename_map.get(key, key)
+                if "primary_image" not in meta_images and model_key == "observation.images.image":
+                    fname = "cam_primary.png"
+                    meta_images["primary_image"] = fname
+                elif "primary_image" not in meta_images and not self.rename_map:
+                    # No rename_map: treat first image as primary
+                    fname = "cam_primary.png"
+                    meta_images["primary_image"] = fname
+                else:
+                    fname = f"cam_aux_{aux_idx}.png"
+                    meta_images.setdefault("aux_images", []).append(fname)
+                    aux_idx += 1
+
+                cv2.imwrite(str(root / fname), cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+            except Exception as e:
+                self.logger.debug(f"Attention save: failed to write image {key}: {e}")
+
+        # Save attention weights as float16 .npy (compact)
+        for stage, layers in captured.store.items():
+            for layer_idx, weights in layers.items():
+                fname = f"attn_{stage}_layer{layer_idx:02d}.npy"
+                np.save(str(root / fname), weights.numpy().astype(np.float16))
+
+        # Save token boundary metadata + image name map
+        meta = {k: int(v) for k, v in captured.meta.items()}
+        meta.update(meta_images)
+        with open(root / "meta.json", "w", encoding="utf-8") as f:
+            json.dump(meta, f)
+
     def _predict_action_chunk(self, observation_t: TimedObservation) -> list[TimedAction]:
         """Predict an action chunk based on an observation.
 
@@ -756,7 +846,19 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
 
         """3. Get action chunk"""
         start_inference = time.perf_counter()
-        raw_action_tensor = self._get_action_chunk(observation)
+        if self.capture_attn_enable:
+            try:
+                from lerobot.policies.xvla.attention_capture import capture_attention
+                with capture_attention() as _captured:
+                    raw_action_tensor = self._get_action_chunk(observation)
+                raw_obs_images = observation_t.get_observation()
+                self._save_attention_data(raw_obs_images, _captured, self._attn_timestep)
+                self._attn_timestep += 1
+            except Exception as _cap_err:
+                self.logger.warning(f"Attention capture failed (skipped): {_cap_err}")
+                raw_action_tensor = self._get_action_chunk(observation)
+        else:
+            raw_action_tensor = self._get_action_chunk(observation)
         inference_time = time.perf_counter() - start_inference
         self.logger.info(
             f"Preprocessing and inference took {inference_time:.4f}s, action shape: {raw_action_tensor.shape}"

@@ -122,6 +122,7 @@ class Attention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
+        self._layer_idx: int = -1  # set by SoftPromptedTransformer after construction
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -144,7 +145,9 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(0)  # each: [batch_size, num_heads, seq_len, head_dim]
         q, k = self.q_norm(q), self.k_norm(k)
 
-        if self.fused_attn:
+        from .attention_capture import is_capturing, store_attn
+
+        if self.fused_attn and not is_capturing():
             x = functional.scaled_dot_product_attention(
                 q,
                 k,
@@ -155,6 +158,7 @@ class Attention(nn.Module):
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)  # [batch_size, num_heads, seq_len, seq_len]
             attn = attn.softmax(dim=-1)
+            store_attn("soft_transformer", self._layer_idx, attn)
             attn = self.attn_drop(attn)
             x = attn @ v  # [batch_size, num_heads, seq_len, head_dim]
 
@@ -321,6 +325,8 @@ class SoftPromptedTransformer(nn.Module):
         self.blocks = nn.ModuleList(
             [TransformerBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)]
         )
+        for i, block in enumerate(self.blocks):
+            block.attn._layer_idx = i
 
         if use_hetero_proj:
             self.vlm_proj = DomainAwareLinear(multi_modal_input_size, hidden_size, num_domains=num_domains)
@@ -406,6 +412,15 @@ class SoftPromptedTransformer(nn.Module):
                 batch_size, self.len_soft_prompts, self.hidden_size
             )
             x = torch.cat([x, soft_prompts], dim=1)
+
+        # Store token boundary metadata for attention visualization
+        from .attention_capture import store_meta
+        store_meta(
+            num_actions=num_actions,
+            T_vlm=vlm_features.shape[1],
+            T_aux=aux_visual_inputs.shape[1],
+            len_soft_prompts=self.len_soft_prompts,
+        )
 
         # Transformer backbone
         for block in self.blocks:

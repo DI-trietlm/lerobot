@@ -216,6 +216,16 @@ class RobotClientConfig:
         metadata={"help": "Directory to save recorded observation images and metadata"},
     )
 
+    # Attention capture configuration (server-side)
+    capture_attn_enable: bool = field(
+        default=False,
+        metadata={"help": "Capture and save attention weights on the server during inference (X-VLA only)"},
+    )
+    capture_attn_dir: str = field(
+        default="attention_captures",
+        metadata={"help": "Server-side directory to save captured attention weights and observation images"},
+    )
+
     @property
     def environment_dt(self) -> float:
         """Environment time step, in seconds"""

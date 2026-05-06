@@ -121,6 +121,8 @@ class RobotClient:
             xvla_domain_id=config.xvla_domain_id,
             image_compress_enable=config.image_compress_enable,
             image_compress_quality=config.image_compress_quality,
+            capture_attn_enable=config.capture_attn_enable,
+            capture_attn_dir=config.capture_attn_dir,
         )
         self.channel = grpc.insecure_channel(
             self.server_address, grpc_channel_options(initial_backoff=f"{config.environment_dt:.4f}s")

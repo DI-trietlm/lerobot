@@ -69,6 +69,10 @@ class RTCXVLAClientOnlyConfig:
     record_obs_enable: bool = False
     record_obs_dir: str = "recorded_obs"
 
+    # Attention capture (server-side, X-VLA only)
+    capture_attn_enable: bool = False
+    capture_attn_dir: str = "attention_captures"
+
     def __post_init__(self):
         if self.robot is None:
             raise ValueError("robot configuration is required")
@@ -127,6 +131,8 @@ def _to_robot_client_config(cfg: RTCXVLAClientOnlyConfig) -> RobotClientConfig:
         rtc_debug_maxlen=cfg.rtc_debug_maxlen,
         inference_delay_steps=cfg.inference_delay_steps,
         xvla_domain_id=cfg.xvla_domain_id,
+        capture_attn_enable=cfg.capture_attn_enable,
+        capture_attn_dir=cfg.capture_attn_dir,
     )
 
 

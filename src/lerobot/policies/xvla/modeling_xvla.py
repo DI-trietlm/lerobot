@@ -198,10 +198,34 @@ class XVLAModel(nn.Module):
             inputs_embeds,
         )
 
-        enc_out = self.vlm.language_model.model.encoder(
-            attention_mask=attention_mask,
-            inputs_embeds=merged_embeds,
-        )[0]
+        from .attention_capture import is_capturing, store_attn, store_meta
+
+        if is_capturing():
+            enc_result = self.vlm.language_model.model.encoder(
+                attention_mask=attention_mask,
+                inputs_embeds=merged_embeds,
+                output_attentions=True,
+            )
+            for layer_idx, layer_attn in enumerate(enc_result.attentions):
+                store_attn("florence2", layer_idx, layer_attn)
+            # tokens_per_view = 1 global_avg_pool token + spatial_h*spatial_w patch tokens
+            # The model asserts square feature maps (see modeling_florence2.py line 2530)
+            n_spatial = tokens_per_view - 1
+            spatial_hw = int(n_spatial ** 0.5)
+            store_meta(
+                T_vis=tokens_per_view,
+                T_vis_global=1,       # number of leading global (non-spatial) tokens per view
+                spatial_h=spatial_hw,
+                spatial_w=spatial_hw,
+                T_text=input_ids.shape[1],
+                num_views=num_views,
+            )
+            enc_out = enc_result.last_hidden_state
+        else:
+            enc_out = self.vlm.language_model.model.encoder(
+                attention_mask=attention_mask,
+                inputs_embeds=merged_embeds,
+            )[0]
 
         aux_visual_inputs = image_features[:, 1:].reshape(batch_size, -1, hidden_dim)
         return {"vlm_features": enc_out, "aux_visual_inputs": aux_visual_inputs}
@@ -326,6 +350,24 @@ class XVLAModel(nn.Module):
                 self.rtc_processor.track(time=time, x_t=x_t, v_t=v_t)
 
         return self.action_space.postprocess(x_t)
+
+    @torch.no_grad()
+    def generate_actions_with_attention(self, *args, **kwargs) -> tuple:
+        """Run generate_actions() with attention weight capture enabled.
+
+        Returns
+        -------
+        actions : Tensor  (same as generate_actions)
+        attn_data : dict with keys:
+            "store" — dict[stage, dict[layer_idx, Tensor[B,H,T,T]]]
+            "meta"  — dict with token boundary values
+        """
+        from .attention_capture import capture_attention
+
+        with capture_attention() as captured:
+            actions = self.generate_actions(*args, **kwargs)
+
+        return actions, {"store": captured.store, "meta": captured.meta}
 
 
 class XVLAPolicy(PreTrainedPolicy):

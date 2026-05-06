@@ -255,6 +255,21 @@ class RTCXVLAControlGUI(tk.Tk):
                 ),
                 _FieldSpec("record_obs_dir", "Record Output Directory", "recorded_obs", "str"),
             ],
+            "Attention Capture (Server-side, X-VLA only)": [
+                _FieldSpec(
+                    "capture_attn_enable",
+                    "Capture Attention Weights",
+                    "false",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec(
+                    "capture_attn_dir",
+                    "Attention Output Directory",
+                    "attention_captures",
+                    "str",
+                ),
+            ],
             "Homing": [
                 _FieldSpec("homing_duration_start", "Homing Duration Start", "8.0", "float"),
                 _FieldSpec("homing_duration_after_stop", "Homing Duration After Stop", "8.0", "float"),
@@ -490,6 +505,8 @@ class RTCXVLAControlGUI(tk.Tk):
             xvla_domain_id=self._parse_optional_int("xvla_domain_id"),
             record_obs_enable=self._parse_bool("record_obs_enable"),
             record_obs_dir=self._vars["record_obs_dir"].get().strip() or "recorded_obs",
+            capture_attn_enable=self._parse_bool("capture_attn_enable"),
+            capture_attn_dir=self._vars["capture_attn_dir"].get().strip() or "attention_captures",
         )
         return cfg
 

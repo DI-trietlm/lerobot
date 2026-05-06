@@ -460,6 +460,8 @@ class RemotePolicyConfig:
     xvla_domain_id: int | None = None
     image_compress_enable: bool = False
     image_compress_quality: int = 90
+    capture_attn_enable: bool = False
+    capture_attn_dir: str = "attention_captures"
 
 
 def _compare_observation_states(obs1_state: torch.Tensor, obs2_state: torch.Tensor, atol: float) -> bool:

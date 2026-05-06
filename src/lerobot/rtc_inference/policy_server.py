@@ -810,7 +810,7 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         for stage, layers in captured.store.items():
             for layer_idx, weights in layers.items():
                 fname = f"attn_{stage}_layer{layer_idx:02d}.npy"
-                np.save(str(root / fname), weights.numpy().astype(np.float16))
+                np.save(str(root / fname), weights.float().numpy().astype(np.float16))
 
         # Save token boundary metadata + image name map
         meta = {k: int(v) for k, v in captured.meta.items()}

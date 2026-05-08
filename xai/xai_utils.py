@@ -231,9 +231,6 @@ def _register_source_package() -> None:
 _install_lerobot_stubs()
 _register_source_package()
 
-from xvla_src.configuration_florence2 import Florence2Config                 # noqa: E402
-from xvla_src.modeling_florence2 import Florence2ForConditionalGeneration    # noqa: E402
-
 
 def resize_with_pad(img: torch.Tensor, height: int, width: int) -> torch.Tensor:
     """Letterbox-resize maintaining aspect ratio; padding value = 0."""
@@ -266,16 +263,36 @@ def pil_to_tensor(pil_img, device: torch.device) -> torch.Tensor:
     return resize_with_pad(arr, DAVIT_INPUT_SIZE[0], DAVIT_INPUT_SIZE[1]).to(device)
 
 
-def load_florence2_config() -> Florence2Config:
+def load_florence2_config():
+    from xvla_src.configuration_florence2 import Florence2Config
     with open(os.path.join(MODEL_DIR, "config.json")) as f:
         raw = json.load(f)
     return Florence2Config(**raw["florence_config"])
 
 
+def load_raw_state_dict(model_dir: str) -> dict[str, torch.Tensor]:
+    model_path = os.path.join(model_dir, "model.safetensors")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"model.safetensors not found at {model_path}")
+    import safetensors.torch as st
+    return st.load_file(model_path)
+
+
+def load_normalizer_stats(model_dir: str) -> dict[str, torch.Tensor]:
+    stats_path = os.path.join(
+        model_dir,
+        "policy_preprocessor_step_7_normalizer_processor.safetensors",
+    )
+    if not os.path.exists(stats_path):
+        raise FileNotFoundError(f"normalizer stats not found at {stats_path}")
+    import safetensors.torch as st
+    return st.load_file(stats_path)
+
+
 def load_vision_tower(
     device: torch.device,
     keep_language_encoder: bool = False,
-) -> Florence2ForConditionalGeneration:
+):
     """
     Loads the Florence-2 model from xvla-pouring-0.1/model.safetensors.
 
@@ -283,6 +300,8 @@ def load_vision_tower(
     Set keep_language_encoder=True for text-guided attention extraction.
     Returns the model in eval mode on the specified device.
     """
+    from xvla_src.modeling_florence2 import Florence2ForConditionalGeneration
+
     config = load_florence2_config()
     model = Florence2ForConditionalGeneration(config)
 

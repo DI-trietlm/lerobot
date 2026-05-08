@@ -11,6 +11,7 @@ Runs on a GPU server. Does **not** require the full LeRobot framework.
 | `xai_feature_maps.py` | Phase 1a — visualizes mean-channel activation maps at each DaViT stage |
 | `xai_p0v_raw_attention.py` | Phase 1b — extracts language→image attention from the Florence-2 encoder (single image) |
 | `xai_p0v_raw_attention_video.py` | Phase 1c — same as above, processed frame-by-frame over an MP4 video |
+| `xai_weight_diff.py` | Phase 4 — compares weight tensors between two XVLA checkpoints, reports per-component divergence |
 | `xai_utils.py` | Shared bootstrap: lerobot stubs, model loading, image preprocessing |
 | `check_environment.py` | Verifies that all dependencies are installed correctly |
 
@@ -119,10 +120,24 @@ python3 xai_p0v_raw_attention_video.py \
 
 Output: `xai/outputs/p0v_video_<videoname>.mp4`
 
+### 5. Weight comparison between checkpoints
+
+```bash
+python3 xai_weight_diff.py \
+    --model_a ../xvla-pouring-0.1 \
+    --model_b ../xvla-pouring-0.2
+```
+
+Outputs:
+- Terminal report with per-component divergence stats
+- `weight_diff_summary.png`
+- `weight_diff_heatmap.png`
+- `weight_diff_histogram.png`
+
 Use `--dry-run` on any script to verify model loading without running the full pipeline.
 
 ## Notes
 
-- All scripts require a CUDA-capable GPU.
+- Most scripts require a CUDA-capable GPU. `xai_weight_diff.py` runs on CPU only.
 - The model checkpoint (`model.safetensors`) is **not** included in this repository. Obtain it separately and point `XVLA_MODEL_DIR` to its location.
 - `xai_utils.py` bootstraps the lerobot dependency stubs at import time — it must not be run directly.

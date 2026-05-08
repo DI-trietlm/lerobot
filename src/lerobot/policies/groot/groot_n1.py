@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -174,7 +173,6 @@ N_COLOR_CHANNELS = 3
 
 
 # config
-@dataclass
 class GR00TN15Config(PretrainedConfig):
     model_type = "gr00t_n1_5"
     backbone_cfg: dict = field(init=False, default=None, metadata={"help": "Backbone configuration."})

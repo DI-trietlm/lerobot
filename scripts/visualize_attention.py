@@ -83,9 +83,9 @@ def load_image_for_mode(ts_dir: Path, meta: dict, stage: str, mode: str) -> np.n
             if img is not None:
                 return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    # Fallback: first PNG with a camera/image name (old format without explicit naming)
+    # Fallback: any PNG that looks like a camera image (old format or any naming)
     for p in sorted(ts_dir.glob("*.png")):
-        if "observation" in p.name or "camera" in p.name or "image" in p.name:
+        if any(tok in p.name for tok in ("observation", "camera", "image", "cam_")):
             img = cv2.imread(str(p))
             if img is not None:
                 return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)

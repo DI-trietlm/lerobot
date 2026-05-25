@@ -22,8 +22,7 @@ DEFAULT_INFERENCE_LATENCY = 1 / DEFAULT_FPS
 """Server side: Timeout for observation queue in seconds"""
 DEFAULT_OBS_QUEUE_TIMEOUT = 2
 
-# RTC inference package currently targets XVLA only.
-SUPPORTED_POLICIES = ["xvla"]
+SUPPORTED_POLICIES = ["xvla", "smolvla"]
 
 # TODO: Add all other robots
 SUPPORTED_ROBOTS = ["so100_follower", "so101_follower", "bi_so_follower", "omx_follower"]

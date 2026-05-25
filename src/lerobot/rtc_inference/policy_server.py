@@ -779,22 +779,25 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
                 else:
                     continue
 
-                # Resize to model input size so pixel grid aligns with attention tokens
+                # Resize to match what the model actually processed.
+                # Must use plain bilinear (same as preprocessor's resize_robot_observation_image),
+                # NOT resize_with_pad — padding shifts pixel positions vs the attention patch grid.
                 if resize_cfg is not None:
-                    import torch
-                    from lerobot.policies.xvla.modeling_xvla import resize_with_pad
                     target_h, target_w = resize_cfg
                     frame_t = torch.from_numpy(frame.astype(np.float32)).permute(2, 0, 1).unsqueeze(0)
-                    frame_t = resize_with_pad(frame_t, target_h, target_w)
+                    frame_t = torch.nn.functional.interpolate(
+                        frame_t, size=(target_h, target_w), mode="bilinear", align_corners=False
+                    )
                     frame = frame_t.squeeze(0).permute(1, 2, 0).clamp(0, 255).byte().numpy()
 
-                # Determine camera role from rename_map so visualizer loads the right image
-                model_key = self.rename_map.get(key, key)
+                # Determine camera role so visualizer loads the right image per mode.
+                # Raw obs keys may lack "observation.images." prefix that rename_map uses.
+                prefixed_key = key if key.startswith("observation.images.") else f"observation.images.{key}"
+                model_key = self.rename_map.get(key) or self.rename_map.get(prefixed_key, key)
                 if "primary_image" not in meta_images and model_key == "observation.images.image":
                     fname = "cam_primary.png"
                     meta_images["primary_image"] = fname
                 elif "primary_image" not in meta_images and not self.rename_map:
-                    # No rename_map: treat first image as primary
                     fname = "cam_primary.png"
                     meta_images["primary_image"] = fname
                 else:
@@ -847,16 +850,23 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         """3. Get action chunk"""
         start_inference = time.perf_counter()
         if self.capture_attn_enable:
-            try:
-                from lerobot.policies.xvla.attention_capture import capture_attention
-                with capture_attention() as _captured:
-                    raw_action_tensor = self._get_action_chunk(observation)
-                raw_obs_images = observation_t.get_observation()
-                self._save_attention_data(raw_obs_images, _captured, self._attn_timestep)
-                self._attn_timestep += 1
-            except Exception as _cap_err:
-                self.logger.warning(f"Attention capture failed (skipped): {_cap_err}")
+            if self.policy_type != "xvla":
+                self.logger.warning(
+                    "Attention capture is only supported for xvla; skipping for '%s'.",
+                    self.policy_type,
+                )
                 raw_action_tensor = self._get_action_chunk(observation)
+            else:
+                try:
+                    from lerobot.policies.xvla.attention_capture import capture_attention
+                    with capture_attention() as _captured:
+                        raw_action_tensor = self._get_action_chunk(observation)
+                    raw_obs_images = observation_t.get_observation()
+                    self._save_attention_data(raw_obs_images, _captured, self._attn_timestep)
+                    self._attn_timestep += 1
+                except Exception as _cap_err:
+                    self.logger.warning(f"Attention capture failed (skipped): {_cap_err}")
+                    raw_action_tensor = self._get_action_chunk(observation)
         else:
             raw_action_tensor = self._get_action_chunk(observation)
         inference_time = time.perf_counter() - start_inference

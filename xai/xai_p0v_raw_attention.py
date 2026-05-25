@@ -232,7 +232,7 @@ def main(args: argparse.Namespace) -> None:
     print(f"Device: {torch.cuda.get_device_name(device) if device.type == 'cuda' else 'CPU'}")
 
     print("\n[1] Loading model with encoder...")
-    model = load_vision_tower(device, keep_language_encoder=True)
+    model = load_vision_tower(device, keep_language_encoder=True, model_id_or_path=args.model)
     encoder = model.language_model.model.encoder
     print(f"Model loaded. Encoder layers: {len(encoder.layers)}")
     report_vram(device, "after_load")
@@ -322,6 +322,14 @@ if __name__ == "__main__":
             "Training instructions for this model:\n"
             f"  seeds:  {_INSTR_SEEDS}\n"
             f"  coffee: {_INSTR_COFFEE}\n"
+        ),
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "XVLA checkpoint source: local directory OR Hugging Face repo id. "
+            "If omitted, uses XVLA_MODEL_DIR / XVLA_MODEL env vars or defaults to lerobot/xvla-base."
         ),
     )
     parser.add_argument(

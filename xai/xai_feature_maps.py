@@ -424,6 +424,14 @@ def save_individual_stages(
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Visualize DaViT feature maps for XAI analysis.")
     p.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "XVLA checkpoint source: local directory OR Hugging Face repo id. "
+            "If omitted, uses XVLA_MODEL_DIR / XVLA_MODEL env vars or defaults to lerobot/xvla-base."
+        ),
+    )
+    p.add_argument(
         "--image",
         default="/home/tunx/XVLA/test_image/000665.png",
         help="Path to the input image (default: test_image.jpg in project root)",
@@ -469,7 +477,7 @@ def main() -> int:
 
     print("\nLoading vision tower …")
     t0 = time.perf_counter()
-    model = load_vision_tower(device)
+    model = load_vision_tower(device, model_id_or_path=args.model)
     print(f"Loaded in {time.perf_counter() - t0:.1f}s")
     report_vram(device, "after load")
 

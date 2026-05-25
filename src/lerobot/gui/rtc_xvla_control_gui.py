@@ -41,7 +41,7 @@ class _FieldSpec:
 class RTCXVLAControlGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("RTC XVLA Control Panel")
+        self.title("RTC Policy Control Panel")
         self.geometry("1300x820")
 
         self._state = _RuntimeState()
@@ -174,7 +174,7 @@ class RTCXVLAControlGUI(tk.Tk):
                 ),
             ],
             "Policy": [
-                _FieldSpec("policy_type", "Policy Type", "xvla", "choice", ("xvla",)),
+                _FieldSpec("policy_type", "Policy Type", "xvla", "choice", ("xvla", "smolvla")),
                 _FieldSpec("pretrained_name_or_path", "Pretrained", "trietlm0306/xvla-poursing-v1", "str"),
                 _FieldSpec("policy_device", "Policy Device", "cuda", "str"),
                 _FieldSpec("client_device", "Client Device", "cpu", "str"),
@@ -247,7 +247,7 @@ class RTCXVLAControlGUI(tk.Tk):
                 _FieldSpec("rtc_debug", "RTC Debug", "false", "bool", ("true", "false")),
                 _FieldSpec("rtc_debug_maxlen", "RTC Debug Maxlen", "100", "int"),
                 _FieldSpec("inference_delay_steps", "Inference Delay Steps (optional)", "2", "optional_int"),
-                _FieldSpec("xvla_domain_id", "XVLA Domain ID (optional)", "15", "optional_int"),
+                _FieldSpec("xvla_domain_id", "XVLA Domain ID (optional, XVLA only)", "15", "optional_int"),
             ],
             "Recording": [
                 _FieldSpec(

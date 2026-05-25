@@ -180,3 +180,5 @@ outputs/
 models/*
 
 client.txt
+
+recorded_obs*/*

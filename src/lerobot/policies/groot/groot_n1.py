@@ -15,7 +15,7 @@
 
 from dataclasses import field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -27,9 +27,14 @@ from lerobot.utils.import_utils import _transformers_available
 
 # Conditional import for type checking and lazy loading
 if TYPE_CHECKING or _transformers_available:
+    from huggingface_hub.dataclasses import strict
     from transformers import AutoConfig, AutoModel, PretrainedConfig, PreTrainedModel
     from transformers.feature_extraction_utils import BatchFeature
 else:
+
+    def strict(cls):
+        return cls
+
     AutoConfig = None
     AutoModel = None
     PretrainedConfig = object
@@ -174,6 +179,7 @@ N_COLOR_CHANNELS = 3
 
 
 # config
+@strict
 class GR00TN15Config(PretrainedConfig):
     model_type = "gr00t_n1_5"
     backbone_cfg: dict = field(init=False, default=None, metadata={"help": "Backbone configuration."})
@@ -185,10 +191,10 @@ class GR00TN15Config(PretrainedConfig):
     action_dim: int = field(init=False, default=None, metadata={"help": "Action dimension."})
     compute_dtype: str = field(default="float32", metadata={"help": "Compute dtype."})
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+    def __post_init__(self, **kwargs):
+        self.backbone_cfg = {} if self.backbone_cfg is None else self.backbone_cfg
+        self.action_head_cfg = {} if self.action_head_cfg is None else self.action_head_cfg
+        super().__post_init__(**kwargs)
 
 
 # real model

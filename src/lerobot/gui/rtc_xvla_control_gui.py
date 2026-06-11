@@ -1,18 +1,22 @@
 import ast
 import contextlib
 import json
+import os
 import threading
 import time
 import tkinter as tk
 from dataclasses import dataclass
+from pathlib import Path
 from queue import Empty, Queue
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
+import draccus
 import numpy as np
 
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
 from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig
 from lerobot.configs.types import RTCAttentionSchedule
+from lerobot.gui import start_pose_analysis as spa
 from lerobot.robots.so_follower import SO100FollowerConfig, SO101FollowerConfig
 from lerobot.rtc_inference.configs import AGGREGATE_FUNCTIONS, RobotClientConfig
 from lerobot.rtc_inference.robot_client import RobotClient
@@ -22,7 +26,7 @@ from lerobot.utils.import_utils import register_third_party_plugins
 @dataclass
 class _RuntimeState:
     connected: bool = False
-    zero_pose_done: bool = False
+    start_pose_done: bool = False
     stream_running: bool = False
     busy: bool = False
     action_receiver_thread: threading.Thread | None = None
@@ -50,6 +54,14 @@ class RTCXVLAControlGUI(tk.Tk):
         self._client: RobotClient | None = None
         self._client_cfg: RobotClientConfig | None = None
 
+        # Latest analysed start-pose region (median used for reset, IQR kept for reference).
+        self._start_pose_stats: spa.StartPoseStats | None = None
+
+        # Safe rest pose (loaded from a capture file; NO defaults) for the auto-reset cycle.
+        self._safe_pose: dict[str, float] | None = None
+        self._safe_pose_meta: dict | None = None
+        self._safe_pose_path: str | None = None
+
         self._vars: dict[str, tk.StringVar] = {}
         self._widgets: dict[str, ttk.Widget] = {}
 
@@ -58,6 +70,7 @@ class RTCXVLAControlGUI(tk.Tk):
         self._build_ui()
         self._start_log_pump()
         self._refresh_controls()
+        self._try_autoload_safe_pose()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_ui(self):
@@ -132,10 +145,12 @@ class RTCXVLAControlGUI(tk.Tk):
         )
         self.btn_connect.pack(fill=tk.X, pady=4)
 
-        self.btn_zero = ttk.Button(
-            parent, text="To Zero Pose", command=lambda: self._run_async(self._on_zero_pose)
+        self.btn_reset = ttk.Button(
+            parent,
+            text="Reset Start-Pose",
+            command=lambda: self._run_async(self._on_reset_start_pose),
         )
-        self.btn_zero.pack(fill=tk.X, pady=4)
+        self.btn_reset.pack(fill=tk.X, pady=4)
 
         self.btn_call = ttk.Button(
             parent, text="Call to Server", command=lambda: self._run_async(self._on_call_server)
@@ -155,6 +170,48 @@ class RTCXVLAControlGUI(tk.Tk):
             command=lambda: self._run_async(self._on_disconnect),
         )
         self.btn_disconnect.pack(fill=tk.X, pady=4)
+
+        self.btn_cycle = ttk.Button(
+            parent,
+            text="Auto Reset Cycle",
+            command=lambda: self._run_async(self._on_auto_reset_cycle),
+        )
+        self.btn_cycle.pack(fill=tk.X, pady=4)
+
+        # Safe pose (loaded from a capture file; required by the Auto Reset Cycle).
+        sp_frame = ttk.LabelFrame(parent, text="Safe Pose (pre-disconnect rest)")
+        sp_frame.pack(fill=tk.X, pady=(8, 4))
+        self.safe_pose_var = tk.StringVar(value="(none loaded)")
+        ttk.Label(
+            sp_frame, textvariable=self.safe_pose_var, justify="left", wraplength=360, foreground="#555"
+        ).pack(anchor="w", padx=6, pady=4)
+        self.btn_load_safe = ttk.Button(
+            sp_frame, text="Load Safe Pose...", command=self._on_load_safe_pose
+        )
+        self.btn_load_safe.pack(fill=tk.X, padx=6, pady=(0, 6))
+
+        ttk.Separator(parent, orient="horizontal").pack(fill=tk.X, pady=(10, 6))
+
+        self.btn_export = ttk.Button(
+            parent,
+            text="Export Config (CLI)",
+            command=self._on_export_config,
+        )
+        self.btn_export.pack(fill=tk.X, pady=4)
+
+        self.btn_import = ttk.Button(
+            parent,
+            text="Import Config",
+            command=self._on_import_config,
+        )
+        self.btn_import.pack(fill=tk.X, pady=4)
+
+        self.btn_analyze = ttk.Button(
+            parent,
+            text="Analyze Dataset → Start-Pose",
+            command=lambda: self._run_bg(self._on_analyze_dataset),
+        )
+        self.btn_analyze.pack(fill=tk.X, pady=4)
 
         log_label = ttk.Label(parent, text="Logs", font=("Segoe UI", 10, "bold"))
         log_label.pack(anchor="w", pady=(14, 4))
@@ -270,11 +327,32 @@ class RTCXVLAControlGUI(tk.Tk):
                     "str",
                 ),
             ],
-            "Homing": [
-                _FieldSpec("homing_duration_start", "Homing Duration Start", "8.0", "float"),
-                _FieldSpec("homing_duration_after_stop", "Homing Duration After Stop", "8.0", "float"),
-                _FieldSpec("gripper_home_value", "Gripper Home Value", "0.0", "float"),
-                _FieldSpec("zero_pose_left_offset_deg", "Zero Pose Left Offset (deg)", "20.0", "float"),
+            # Safe start-pose reset target. Defaults are the per-joint MEDIAN of the
+            # 96 training-episode start poses (di-techinnova/so-arm-101-pouring-0.2),
+            # so reset lands inside the in-distribution manifold the policy was trained
+            # on (NOT the old all-zeros pose, which was OOD on shoulder_pan and gripper).
+            "Start Pose (safe reset target, degrees)": [
+                _FieldSpec(
+                    "dataset_repo_id",
+                    "Dataset Repo (for start-pose analysis)",
+                    "di-techinnova/so-arm-101-pouring-0.2",
+                    "str",
+                ),
+                _FieldSpec(
+                    "reset_pose_mode",
+                    "Reset Mode",
+                    "median",
+                    "choice",
+                    ("median", "random_iqr", "random_minmax"),
+                ),
+                _FieldSpec("start_pose_shoulder_pan", "shoulder_pan (median)", "-5.5", "float"),
+                _FieldSpec("start_pose_shoulder_lift", "shoulder_lift", "-5.5", "float"),
+                _FieldSpec("start_pose_elbow_flex", "elbow_flex", "11.7", "float"),
+                _FieldSpec("start_pose_wrist_flex", "wrist_flex", "0.6", "float"),
+                _FieldSpec("start_pose_wrist_roll", "wrist_roll", "2.5", "float"),
+                _FieldSpec("start_pose_gripper", "gripper", "1.4", "float"),
+                _FieldSpec("reset_duration_start", "Reset Duration (s)", "8.0", "float"),
+                _FieldSpec("reset_duration_after_stop", "Reset Duration After Stop (s)", "8.0", "float"),
             ],
         }
 
@@ -308,23 +386,30 @@ class RTCXVLAControlGUI(tk.Tk):
     def _refresh_controls(self):
         with self._state_lock:
             connected = self._state.connected
-            zero_pose_done = self._state.zero_pose_done
+            start_pose_done = self._state.start_pose_done
             stream_running = self._state.stream_running
             busy = self._state.busy
 
         self.btn_connect.configure(state=("normal" if not connected and not busy else "disabled"))
-        self.btn_zero.configure(
+        self.btn_reset.configure(
             state=("normal" if connected and not stream_running and not busy else "disabled")
         )
         self.btn_call.configure(
             state=(
-                "normal" if connected and zero_pose_done and not stream_running and not busy else "disabled"
+                "normal" if connected and start_pose_done and not stream_running and not busy else "disabled"
             )
         )
         self.btn_stop_stream.configure(
             state=("normal" if connected and stream_running and not busy else "disabled")
         )
         self.btn_disconnect.configure(state=("normal" if connected and not busy else "disabled"))
+        self.btn_cycle.configure(
+            state=(
+                "normal"
+                if connected and not busy and self._safe_pose is not None
+                else "disabled"
+            )
+        )
 
     def _run_async(self, fn):
         def worker():
@@ -337,6 +422,24 @@ class RTCXVLAControlGUI(tk.Tk):
                 self.after(0, lambda: messagebox.showerror("Error", error_text))
             finally:
                 self._set_busy(False)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _run_bg(self, fn, *, show_error: bool = True):
+        """Run ``fn`` off the UI thread WITHOUT toggling the robot 'busy' state.
+
+        Used for dataset analysis / Hub checks so they never disable robot controls
+        (e.g. Stop Stream) while running.
+        """
+
+        def worker():
+            try:
+                fn()
+            except Exception as exc:
+                error_text = str(exc)
+                self._log(f"[ERROR] {exc}")
+                if show_error:
+                    self.after(0, lambda: messagebox.showerror("Error", error_text))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -510,6 +613,246 @@ class RTCXVLAControlGUI(tk.Tk):
         )
         return cfg
 
+    def _build_export_payload(self) -> dict:
+        """Build a draccus-loadable dict matching the CLI's RTCXVLAClientOnlyConfig.
+
+        Reuses ``_build_client_config`` so the exported file reflects exactly the
+        same validated values the GUI would use to connect. The robot sub-config is
+        encoded with draccus so its ``type`` discriminator (and per-camera ``type``)
+        is included, making the JSON round-trip via ``--config_path``.
+        """
+        cfg = self._build_client_config()
+        schedule = cfg.rtc_prefix_attention_schedule
+        return {
+            "server_address": cfg.server_address,
+            "robot": draccus.encode(cfg.robot),
+            "task": cfg.task,
+            "policy_type": cfg.policy_type,
+            "pretrained_name_or_path": cfg.pretrained_name_or_path,
+            "policy_device": cfg.policy_device,
+            "client_device": cfg.client_device,
+            "rename_map": cfg.rename_map,
+            "actions_per_chunk": cfg.actions_per_chunk,
+            "chunk_size_threshold": cfg.chunk_size_threshold,
+            "aggregate_fn_name": cfg.aggregate_fn_name,
+            "rtc_execution_horizon": cfg.rtc_execution_horizon,
+            "rtc_max_guidance_weight": cfg.rtc_max_guidance_weight,
+            "rtc_prefix_attention_schedule": getattr(schedule, "value", str(schedule)),
+            "rtc_debug": cfg.rtc_debug,
+            "rtc_debug_maxlen": cfg.rtc_debug_maxlen,
+            "inference_delay_steps": cfg.inference_delay_steps,
+            "xvla_domain_id": cfg.xvla_domain_id,
+            "fps": cfg.fps,
+            "obs_timestep_independent": cfg.obs_timestep_independent,
+            "image_compress_enable": cfg.image_compress_enable,
+            "image_compress_quality": cfg.image_compress_quality,
+            "interpolation_multiplier": cfg.interpolation_multiplier,
+            "debug_visualize_queue_size": cfg.debug_visualize_queue_size,
+            "record_obs_enable": cfg.record_obs_enable,
+            "record_obs_dir": cfg.record_obs_dir,
+            "capture_attn_enable": cfg.capture_attn_enable,
+            "capture_attn_dir": cfg.capture_attn_dir,
+        }
+
+    def _on_export_config(self):
+        # Runs on the Tk main thread (filedialog must not be called off-thread).
+        try:
+            payload = self._build_export_payload()
+        except Exception as exc:
+            self._log(f"[ERROR] Export failed: {exc}")
+            messagebox.showerror("Export Config", f"Invalid configuration:\n{exc}")
+            return
+
+        path = filedialog.asksaveasfilename(
+            title="Export RTC config",
+            defaultextension=".json",
+            initialfile="rtc_xvla_config.json",
+            filetypes=[("JSON config", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+        except Exception as exc:
+            self._log(f"[ERROR] Could not write config: {exc}")
+            messagebox.showerror("Export Config", f"Could not write file:\n{exc}")
+            return
+
+        run_cmd = (
+            "uv run python scripts/orchestrator/orchestrator_rtc_xvla_client_only.py "
+            f'--config_path="{path}"'
+        )
+        self._log(f"[OK] Config exported to {path}")
+        self._log(f"[INFO] Run with: {run_cmd}")
+        messagebox.showinfo(
+            "Export Config",
+            "Configuration exported to:\n"
+            f"{path}\n\n"
+            "Run it from the repo root with:\n\n"
+            f"{run_cmd}\n\n"
+            "You can still override any field on the command line, "
+            "e.g. append --task=\"...\".",
+        )
+
+    @staticmethod
+    def _format_var_value(value) -> str:
+        """Convert a decoded config value into the string a tk var/widget expects."""
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False)
+        return str(value)
+
+    def _apply_imported_payload(self, payload: dict) -> list[str]:
+        """Populate form fields from a draccus-style config dict.
+
+        Returns the list of keys that could not be mapped to a form field.
+        """
+        # Map robot.<field> -> robot_<var>; "cameras" -> robot_cameras (JSON).
+        robot_field_to_var = {
+            "type": "robot_type",
+            "port": "robot_port",
+            "id": "robot_id",
+            "use_degrees": "robot_use_degrees",
+            "disable_torque_on_disconnect": "robot_disable_torque_on_disconnect",
+            "max_relative_target": "robot_max_relative_target",
+            "cameras": "robot_cameras",
+        }
+
+        skipped: list[str] = []
+        for key, value in payload.items():
+            if key == "robot":
+                if not isinstance(value, dict):
+                    skipped.append("robot")
+                    continue
+                for rkey, rval in value.items():
+                    var_key = robot_field_to_var.get(rkey)
+                    if var_key is None or var_key not in self._vars:
+                        if rkey not in ("calibration_dir",):
+                            skipped.append(f"robot.{rkey}")
+                        continue
+                    self._vars[var_key].set(self._format_var_value(rval))
+                continue
+
+            if key in self._vars:
+                self._vars[key].set(self._format_var_value(value))
+            else:
+                skipped.append(key)
+
+        return skipped
+
+    def _on_import_config(self):
+        # Runs on the Tk main thread (filedialog must not be called off-thread).
+        path = filedialog.askopenfilename(
+            title="Import RTC config",
+            filetypes=[("JSON config", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, encoding="utf-8") as f:
+                payload = json.load(f)
+        except Exception as exc:
+            self._log(f"[ERROR] Could not read config: {exc}")
+            messagebox.showerror("Import Config", f"Could not read file:\n{exc}")
+            return
+
+        if not isinstance(payload, dict):
+            self._log("[ERROR] Import failed: config root must be a JSON object")
+            messagebox.showerror("Import Config", "Config root must be a JSON object.")
+            return
+
+        skipped = self._apply_imported_payload(payload)
+
+        self._log(f"[OK] Config imported from {path}")
+        if skipped:
+            self._log(f"[WARN] Ignored unknown keys: {', '.join(skipped)}")
+        messagebox.showinfo(
+            "Import Config",
+            "Configuration loaded into the form."
+            + (f"\n\nIgnored unknown keys:\n{', '.join(skipped)}" if skipped else ""),
+        )
+
+    # Canonical joint (from start_pose_analysis) -> the GUI start-pose field to fill.
+    _CANON_TO_FIELD = {
+        "shoulder_pan": "start_pose_shoulder_pan",
+        "shoulder_lift": "start_pose_shoulder_lift",
+        "elbow_flex": "start_pose_elbow_flex",
+        "wrist_flex": "start_pose_wrist_flex",
+        "wrist_roll": "start_pose_wrist_roll",
+        "gripper": "start_pose_gripper",
+    }
+
+    def _on_analyze_dataset(self):
+        # Runs off-thread via _run_bg (network + parquet read). Does NOT touch robot state.
+        repo = self._vars["dataset_repo_id"].get().strip()
+        if not repo:
+            raise RuntimeError("Dataset Repo is empty")
+
+        self._log(f"[INFO] Analyzing safe start-pose region for {repo} ...")
+        stats = spa.analyze_start_pose(repo)
+        spa.save_stats(stats)
+        self.after(0, lambda: self._apply_start_pose_stats(stats))
+
+    def _apply_start_pose_stats(self, stats: spa.StartPoseStats):
+        # Runs on the Tk main thread (mutates StringVars / shows dialog).
+        self._start_pose_stats = stats
+        applied = []
+        for canon, field_key in self._CANON_TO_FIELD.items():
+            if canon in stats.stats and field_key in self._vars:
+                self._vars[field_key].set(f"{stats.stats[canon]['median']:.1f}")
+                applied.append(canon)
+
+        self._log(
+            f"[OK] Analyzed {stats.n_episodes} episodes @ {stats.revision[:8]}. "
+            f"Reset target set to per-joint medians."
+        )
+        for joint in stats.joints:
+            s = stats.stats[joint]
+            self._log(
+                f"    {joint}: median={s['median']:.1f}  "
+                f"IQR=[{s['q1']:.1f}, {s['q3']:.1f}]  range=[{s['min']:.1f}, {s['max']:.1f}]"
+            )
+        missing = [c for c in self._CANON_TO_FIELD if c not in applied]
+        if missing:
+            self._log(f"[WARN] No analyzed value for: {', '.join(missing)} (kept previous).")
+        messagebox.showinfo(
+            "Analyze Dataset",
+            f"Start-pose region updated from {stats.n_episodes} episodes\n"
+            f"{stats.repo_id} @ {stats.revision[:8]}\n\n"
+            "Reset target = per-joint median (inside the safe IQR box).",
+        )
+
+    def _check_dataset_update(self):
+        # Background, non-blocking: compare Hub's latest revision vs the last analysed one.
+        repo = self._vars["dataset_repo_id"].get().strip()
+        if not repo:
+            return
+        try:
+            latest = spa.resolve_revision(repo)
+        except Exception as exc:
+            self._log(f"[WARN] Could not check dataset version for {repo}: {exc}")
+            return
+
+        cached = spa.load_cached_stats(repo)
+        if cached is None:
+            self._log(
+                f"[INFO] No start-pose analysis cached for {repo}. "
+                f"Press 'Analyze Dataset → Start-Pose' to compute the safe region."
+            )
+        elif cached.revision != latest:
+            self._log(
+                f"[INFO] New dataset version for {repo}: {latest[:8]} "
+                f"(analyzed {cached.revision[:8]}). Press 'Analyze Dataset → Start-Pose' to update."
+            )
+        else:
+            self._log(f"[INFO] Start-pose region up to date for {repo} ({latest[:8]}).")
+
     @staticmethod
     def _to_float(value) -> float:
         if hasattr(value, "detach"):
@@ -546,34 +889,77 @@ class RTCXVLAControlGUI(tk.Tk):
 
         raise KeyError(f"Missing joint keys in observation and invalid observation.state fallback: {missing}")
 
-    def _home_to_zero(
+    # Maps each robot joint (matched by substring on its name) to the GUI start-pose field.
+    # Tokens are specific enough to disambiguate (shoulder_pan vs shoulder_lift, wrist_flex
+    # vs wrist_roll). The gripper value is a position, not an angle (no deg->rad conversion).
+    _START_POSE_MAP = (
+        (("shoulder_pan",), "start_pose_shoulder_pan", False),
+        (("shoulder_lift",), "start_pose_shoulder_lift", False),
+        (("elbow",), "start_pose_elbow_flex", False),
+        (("wrist_flex",), "start_pose_wrist_flex", False),
+        (("wrist_roll",), "start_pose_wrist_roll", False),
+        (("gripper", "jaw"), "start_pose_gripper", True),
+    )
+
+    def _start_pose_target_value(self, field_key: str) -> float:
+        """Per-joint reset target (in degrees) according to the selected Reset Mode.
+
+        - ``median``        -> the (user-editable) median field value.
+        - ``random_iqr``    -> uniform sample within [Q1, Q3] of the analyzed region.
+        - ``random_minmax`` -> uniform sample within [min, max] of the analyzed region.
+
+        Random modes need a prior dataset analysis; without it they fall back to the
+        median field value.
+        """
+        median_value = self._parse_float(field_key)
+        mode = self._vars["reset_pose_mode"].get().strip()
+        if mode == "median" or self._start_pose_stats is None:
+            return median_value
+
+        canonical = field_key.removeprefix("start_pose_")
+        s = self._start_pose_stats.stats.get(canonical)
+        if s is None:
+            return median_value
+
+        if mode == "random_iqr":
+            lo, hi = s["q1"], s["q3"]
+        elif mode == "random_minmax":
+            lo, hi = s["min"], s["max"]
+        else:
+            return median_value
+        return float(np.random.uniform(lo, hi))
+
+    def _build_start_pose_target(
+        self, joint_names: list[str], start_action: dict[str, float], use_degrees: bool
+    ) -> tuple[dict[str, float], list[str]]:
+        """Build absolute joint targets for the safe start pose.
+
+        Unmatched joints keep their current value (held in place). Returns (target, matched).
+        """
+        target = dict(start_action)
+        matched: list[str] = []
+        for name in joint_names:
+            lname = name.lower()
+            for tokens, field_key, is_gripper in self._START_POSE_MAP:
+                if any(tok in lname for tok in tokens):
+                    value = self._start_pose_target_value(field_key)
+                    if not is_gripper and not use_degrees:
+                        value = value * np.pi / 180.0
+                    target[name] = value
+                    matched.append(name)
+                    break
+        return target, matched
+
+    def _home_to_pose(
         self,
         robot,
-        homing_duration: float,
+        duration: float,
         start_action: dict[str, float],
         joint_names: list[str],
-        gripper_home_value: float,
-        left_turn_offset_deg: float,
-        use_degrees: bool,
+        target_action: dict[str, float],
     ):
-        target_action = dict.fromkeys(joint_names, 0.0)
-        gripper_name = next((k for k in joint_names if "gripper" in k.lower() or "jaw" in k.lower()), None)
-        if gripper_name:
-            target_action[gripper_name] = gripper_home_value
-
-        left_turn_joint = self._find_left_turn_joint(joint_names)
-        if left_turn_joint is not None and abs(left_turn_offset_deg) > 1e-9:
-            offset_value = left_turn_offset_deg if use_degrees else left_turn_offset_deg * np.pi / 180.0
-            target_action[left_turn_joint] += offset_value
-            unit = "deg" if use_degrees else "rad"
-            self._log(
-                f"[INFO] Zero-pose left offset applied on '{left_turn_joint}': {offset_value:.4f} {unit}"
-            )
-        elif left_turn_joint is None and abs(left_turn_offset_deg) > 1e-9:
-            self._log("[WARN] No base/yaw joint detected. Left offset was skipped.")
-
         hz = 50.0
-        steps = max(1, int(homing_duration * hz))
+        steps = max(1, int(duration * hz))
         sleep_time = 1.0 / hz
 
         for i in range(1, steps + 1):
@@ -587,31 +973,7 @@ class RTCXVLAControlGUI(tk.Tk):
 
         robot.send_action(target_action)
 
-    def _find_left_turn_joint(self, joint_names: list[str]) -> str | None:
-        candidates = [
-            "shoulder_pan",
-            "base",
-            "waist",
-            "yaw",
-            "joint_1",
-            "joint1",
-        ]
-
-        lower_names = {name.lower(): name for name in joint_names}
-        for token in candidates:
-            for lower_name, original in lower_names.items():
-                if token in lower_name and "gripper" not in lower_name and "jaw" not in lower_name:
-                    return original
-
-        for name in joint_names:
-            lname = name.lower()
-            if "gripper" not in lname and "jaw" not in lname:
-                return name
-        return None
-
-    def _home_robot_to_zero(
-        self, homing_duration: float, gripper_home_value: float, left_turn_offset_deg: float
-    ):
+    def _reset_robot_to_start_pose(self, duration: float):
         if self._client is None:
             raise RuntimeError("Client is not connected")
 
@@ -627,15 +989,132 @@ class RTCXVLAControlGUI(tk.Tk):
         except KeyError:
             start_action = dict.fromkeys(joint_names, 0.0)
 
-        self._home_to_zero(
-            robot,
-            homing_duration,
-            start_action,
-            joint_names,
-            gripper_home_value,
-            left_turn_offset_deg,
-            use_degrees,
+        mode = self._vars["reset_pose_mode"].get().strip()
+        if mode != "median" and self._start_pose_stats is None:
+            self._log(
+                f"[WARN] Reset mode '{mode}' needs a dataset analysis; "
+                "falling back to median. Press 'Analyze Dataset → Start-Pose' first."
+            )
+
+        target_action, matched = self._build_start_pose_target(joint_names, start_action, use_degrees)
+        unmatched = [j for j in joint_names if j not in matched]
+        if unmatched:
+            self._log(f"[WARN] Start-pose: no mapping for {unmatched}; holding current value.")
+        self._log(
+            f"[INFO] Reset target (mode={mode}): "
+            + ", ".join(f"{k}={target_action[k]:.1f}" for k in joint_names)
         )
+
+        self._home_to_pose(robot, duration, start_action, joint_names, target_action)
+
+    # ----- Safe pose (capture-file driven; no defaults) --------------------------------
+
+    def _try_autoload_safe_pose(self):
+        default = "safe_pose.json"
+        if os.path.exists(default):
+            try:
+                self._load_safe_pose_file(default)
+                self._log(f"[OK] Auto-loaded safe pose from {default}")
+            except Exception as exc:
+                self._log(f"[WARN] Could not auto-load {default}: {exc}")
+        else:
+            self._log(
+                "[INFO] No safe_pose.json found. Capture one with "
+                "'python -m lerobot.gui.capture_safe_pose' and Load it before Auto Reset Cycle."
+            )
+
+    def _load_safe_pose_file(self, path: str):
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        pose = data.get("safe_pose")
+        if not isinstance(pose, dict) or not pose:
+            raise ValueError("file has no non-empty 'safe_pose' object")
+
+        self._safe_pose = {k: float(v) for k, v in pose.items()}
+        self._safe_pose_meta = {k: v for k, v in data.items() if k != "safe_pose"}
+        self._safe_pose_path = path
+
+        # Warn if the capture's use_degrees disagrees with the GUI robot setting (scale mismatch).
+        file_deg = self._safe_pose_meta.get("use_degrees")
+        if file_deg is not None:
+            gui_deg = self._vars["robot_use_degrees"].get().strip().lower() in {"true", "1", "yes", "y", "on"}
+            if bool(file_deg) != gui_deg:
+                self._log(
+                    f"[WARN] Safe-pose use_degrees={file_deg} != GUI robot use_degrees={gui_deg}; "
+                    "joint values may be wrong-scaled."
+                )
+
+        self.after(0, self._render_safe_pose)
+
+    def _render_safe_pose(self):
+        if self._safe_pose is None:
+            self.safe_pose_var.set("(none loaded)")
+            return
+        meta = self._safe_pose_meta or {}
+        lines = [f"file: {self._safe_pose_path}"]
+        if meta.get("captured_at"):
+            lines.append(f"captured: {meta['captured_at']}")
+        if meta.get("robot_type"):
+            lines.append(
+                f"robot: {meta.get('robot_type')} (id={meta.get('robot_id')}) "
+                f"use_degrees={meta.get('use_degrees')}"
+            )
+        lines.append(
+            ", ".join(f"{k.replace('.pos', '')}={v:.1f}" for k, v in self._safe_pose.items())
+        )
+        self.safe_pose_var.set("\n".join(lines))
+
+    def _on_load_safe_pose(self):
+        # Runs on the Tk main thread (filedialog).
+        path = filedialog.askopenfilename(
+            title="Load safe pose",
+            filetypes=[("JSON", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            self._load_safe_pose_file(path)
+        except Exception as exc:
+            self._log(f"[ERROR] Could not load safe pose: {exc}")
+            messagebox.showerror("Load Safe Pose", f"Could not load file:\n{exc}")
+            return
+        self._log(f"[OK] Safe pose loaded from {path}")
+        self.after(0, self._refresh_controls)
+
+    def _move_to_safe_pose(self, duration: float):
+        if self._client is None:
+            raise RuntimeError("Client is not connected")
+        if not self._safe_pose:
+            raise RuntimeError("No safe pose loaded")
+
+        robot = self._client.robot
+        current_obs = robot.get_observation()
+        joint_names = list(robot.action_features.keys())
+        try:
+            start_action = self._extract_current_action_from_observation(current_obs, joint_names)
+        except KeyError:
+            start_action = dict.fromkeys(joint_names, 0.0)
+
+        target = dict(start_action)
+        matched: list[str] = []
+        for name in joint_names:
+            if name in self._safe_pose:  # exact key match (both are "<motor>.pos")
+                target[name] = float(self._safe_pose[name])
+                matched.append(name)
+            else:  # token fallback (e.g. naming differences)
+                base = name.lower().replace(".pos", "")
+                for key, value in self._safe_pose.items():
+                    if key.lower().replace(".pos", "") == base:
+                        target[name] = float(value)
+                        matched.append(name)
+                        break
+
+        unmatched = [j for j in joint_names if j not in matched]
+        if unmatched:
+            self._log(f"[WARN] Safe pose: no value for {unmatched}; holding current value.")
+        self._log(
+            "[INFO] Safe-pose target: " + ", ".join(f"{k}={target[k]:.1f}" for k in joint_names)
+        )
+        self._home_to_pose(robot, duration, start_action, joint_names, target)
 
     def _stop_client_stream_preserve_robot(self):
         if self._client is None:
@@ -678,52 +1157,50 @@ class RTCXVLAControlGUI(tk.Tk):
 
         with self._state_lock:
             self._state.connected = True
-            self._state.zero_pose_done = False
+            self._state.start_pose_done = False
             self._state.stream_running = False
             self._state.action_receiver_thread = None
             self._state.control_loop_thread = None
 
         self._set_status("Connected")
-        self._log("[OK] Connected to robot. Press 'To Zero Pose' before 'Call to Server'.")
+        self._log("[OK] Connected to robot. Press 'Reset Start-Pose' before 'Call to Server'.")
+        # Non-blocking: tell the user if a newer dataset version warrants re-analysis.
+        self._run_bg(self._check_dataset_update, show_error=False)
         self.after(0, self._refresh_controls)
 
-    def _on_zero_pose(self):
+    def _on_reset_start_pose(self):
         with self._state_lock:
             connected = self._state.connected
             stream_running = self._state.stream_running
         if not connected:
             raise RuntimeError("Please connect first")
         if stream_running:
-            raise RuntimeError("Cannot home while stream is running")
+            raise RuntimeError("Cannot reset while stream is running")
 
-        homing_duration = self._parse_float("homing_duration_start")
-        gripper_home_value = self._parse_float("gripper_home_value")
-        left_turn_offset_deg = self._parse_float("zero_pose_left_offset_deg")
+        duration = self._parse_float("reset_duration_start")
 
-        self._log(f"[INFO] Homing to zero pose ({homing_duration:.1f}s)...")
-        self._home_robot_to_zero(
-            homing_duration=homing_duration,
-            gripper_home_value=gripper_home_value,
-            left_turn_offset_deg=left_turn_offset_deg,
-        )
+        self._log(f"[INFO] Auto-resetting to safe start pose ({duration:.1f}s)...")
+        self._reset_robot_to_start_pose(duration=duration)
 
         with self._state_lock:
-            self._state.zero_pose_done = True
+            self._state.start_pose_done = True
 
-        self._set_status("Connected | Zero Pose Done")
-        self._log("[OK] Robot is at zero pose")
+        self._set_status("Connected | Start Pose Done")
+        self._log("[OK] Robot is at safe start pose")
         self.after(0, self._refresh_controls)
 
     def _on_call_server(self):
         with self._state_lock:
             connected = self._state.connected
-            zero_pose_done = self._state.zero_pose_done
+            start_pose_done = self._state.start_pose_done
             stream_running = self._state.stream_running
 
         if not connected:
             raise RuntimeError("Please connect first")
-        if not zero_pose_done:
-            raise RuntimeError("Call to Server requires robot at zero pose. Press 'To Zero Pose' first")
+        if not start_pose_done:
+            raise RuntimeError(
+                "Call to Server requires robot at the safe start pose. Press 'Reset Start-Pose' first"
+            )
         if stream_running:
             raise RuntimeError("Stream is already running")
         if self._client is None or self._client_cfg is None:
@@ -744,8 +1221,8 @@ class RTCXVLAControlGUI(tk.Tk):
 
         with self._state_lock:
             self._state.stream_running = True
-            # Require a fresh zero-pose check before next call cycle.
-            self._state.zero_pose_done = False
+            # Require a fresh start-pose reset before next call cycle.
+            self._state.start_pose_done = False
             self._state.action_receiver_thread = receiver
             self._state.control_loop_thread = control
 
@@ -765,21 +1242,69 @@ class RTCXVLAControlGUI(tk.Tk):
         self._log("[INFO] Stopping stream (preserve robot connection)...")
         self._stop_client_stream_preserve_robot()
 
-        homing_duration = self._parse_float("homing_duration_after_stop")
-        gripper_home_value = self._parse_float("gripper_home_value")
-        left_turn_offset_deg = self._parse_float("zero_pose_left_offset_deg")
-        self._home_robot_to_zero(
-            homing_duration=homing_duration,
-            gripper_home_value=gripper_home_value,
-            left_turn_offset_deg=left_turn_offset_deg,
-        )
+        duration = self._parse_float("reset_duration_after_stop")
+        self._log(f"[INFO] Auto-resetting to safe start pose ({duration:.1f}s)...")
+        self._reset_robot_to_start_pose(duration=duration)
 
         with self._state_lock:
-            self._state.zero_pose_done = True
+            self._state.start_pose_done = True
 
-        self._set_status("Connected | Zero Pose Done")
-        self._log("[OK] Stream stopped and robot returned to zero pose")
+        self._set_status("Connected | Start Pose Done")
+        self._log("[OK] Stream stopped and robot auto-reset to safe start pose")
         self.after(0, self._refresh_controls)
+
+    def _on_auto_reset_cycle(self):
+        """One-button reset between runs, with a FULL reconnect so no stale stream state.
+
+        Flow: stop stream -> move to SAFE rest pose -> disconnect -> reconnect ->
+        reset to start pose (selected mode) -> call to server.
+        """
+        if self._safe_pose is None:
+            raise RuntimeError("No safe pose loaded. Capture & Load a safe-pose file first.")
+
+        with self._state_lock:
+            connected = self._state.connected
+            stream_running = self._state.stream_running
+        if not connected:
+            raise RuntimeError("Please connect first")
+
+        self._log("[CYCLE] Auto-reset cycle started.")
+
+        # 1) stop the stream (if running) and move to the safe rest pose
+        if stream_running:
+            self._log("[CYCLE 1/5] Stopping stream...")
+            self._stop_client_stream_preserve_robot()
+        else:
+            self._log("[CYCLE 1/5] No active stream.")
+        self._set_status("Cycle | Moving to safe pose")
+        self._move_to_safe_pose(self._parse_float("reset_duration_after_stop"))
+
+        # 2) full disconnect -> drops the old client-server connection
+        self._log("[CYCLE 2/5] Disconnecting (closing client-server connection)...")
+        self._set_status("Cycle | Disconnecting")
+        self._on_disconnect()
+
+        # 3) fresh connect -> brand new RobotClient / channel
+        self._log("[CYCLE 3/5] Reconnecting (fresh connection)...")
+        self._set_status("Cycle | Reconnecting")
+        self._on_connect()
+        with self._state_lock:
+            if not self._state.connected:
+                raise RuntimeError("Reconnect failed; aborting cycle")
+
+        # 4) reset to the in-distribution start pose (median / random_iqr / random_minmax)
+        self._log("[CYCLE 4/5] Resetting to start pose...")
+        self._set_status("Cycle | Reset start pose")
+        self._reset_robot_to_start_pose(self._parse_float("reset_duration_start"))
+        with self._state_lock:
+            self._state.start_pose_done = True
+
+        # 5) call to server -> start a fresh stream
+        self._log("[CYCLE 5/5] Calling to server...")
+        self._set_status("Cycle | Calling server")
+        self._on_call_server()
+
+        self._log("[CYCLE] Auto-reset cycle complete.")
 
     def _on_disconnect(self):
         with self._state_lock:
@@ -806,7 +1331,7 @@ class RTCXVLAControlGUI(tk.Tk):
 
         with self._state_lock:
             self._state.connected = False
-            self._state.zero_pose_done = False
+            self._state.start_pose_done = False
             self._state.stream_running = False
             self._state.action_receiver_thread = None
             self._state.control_loop_thread = None

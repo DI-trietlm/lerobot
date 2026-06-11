@@ -1,0 +1,720 @@
+PS C:\Users\admin> ssh trietlm@192.168.30.244
+Welcome to Ubuntu 23.10 (GNU/Linux 6.8.0-107-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+1 device has a firmware upgrade available.
+Run `fwupdmgr get-upgrades` for more information.
+
+
+54 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+
+Your Ubuntu release is not supported anymore.
+For upgrade information, please visit:
+http://www.ubuntu.com/releaseendoflife
+
+New release '24.04.4 LTS' available.
+Run 'do-release-upgrade' to upgrade to it.
+
+
+11 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+1 device has a firmware upgrade available.
+Run `fwupdmgr get-upgrades` for more information.
+
+Last login: Wed Jun 10 08:46:05 2026 from 192.168.30.1
+trietlm@di-server:~$ cd lerobot
+trietlm@di-server:~/lerobot$ uv run python -m lerobot.rtc_inference.policy_server --host 0.0.0.0 --port 4567 --fps 15 --obs_queue_timeout 0.7
+INFO 2026-06-10 09:32:10 y_server.py:953 {'fps': 15,
+ 'host': '0.0.0.0',
+ 'inference_latency': 0.03333333333333333,
+ 'obs_queue_timeout': 0.7,
+ 'port': 4567}
+INFO 2026-06-10 09:32:10 y_server.py:219 RTC audit files | inter_arrival=logs/rtc_audit/policy_server_obs_interarrival_1781058730.csv | queue_latency=logs/rtc_audit/policy_server_queue_latency_1781058730.csv
+INFO 2026-06-10 09:32:10 y_server.py:963 PolicyServer started on 0.0.0.0:4567
+INFO 2026-06-10 09:41:49 y_server.py:266 Client ipv4:192.168.20.205:51114 connected and ready
+INFO 2026-06-10 09:41:49 y_server.py:292 Receiving policy instructions from ipv4:192.168.20.205:51114 | Policy type: smolvla | Pretrained name or path: di-techinnova/smolvla-pouring-0.1 | Actions per chunk: 33 | Device: cuda
+Loading  HuggingFaceTB/SmolVLM2-500M-Video-Instruct weights ...
+Loading weights: 100%|███████████████████████████████████████████████████████████████████████████| 489/489 [00:00<00:00, 4120.61it/s]
+Reducing the number of VLM layers to 16 ...
+INFO 2026-06-10 09:42:01 y_server.py:323 Policy action horizon | n_action_steps=33 | chunk_size=33 | requested_actions_per_chunk=33
+INFO 2026-06-10 09:42:03 y_server.py:380 Time taken to put policy on cuda: 14.4178 seconds
+INFO 2026-06-10 09:42:03 y_server.py:382 RTC enabled on server | horizon=10 | max_weight=10.0 | schedule=RTCAttentionSchedule.EXP | inference_delay_steps=2
+INFO 2026-06-10 09:42:03 y_server.py:389 Transport session settings (from client policy setup) | mode=jpeg | jpeg_quality=90
+INFO 2026-06-10 09:42:03 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:03 y_server.py:564 Running inference for observation #0 (must_go: True)
+INFO 2026-06-10 09:42:03 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:03 y_server.py:873 Preprocessing and inference took 0.1302s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:03 y_server.py:922 Observation 0 | Total time: 139.24ms
+INFO 2026-06-10 09:42:03 y_server.py:590 [SERVER->CLIENT] Sending 31 actions | First action: [-4.835302352905273, 0.7176215648651123, -1.1750507354736328, 0.31598663330078125, 0.1717090606689453, 0.9209127426147461] | Payload size: 33016 bytes
+INFO 2026-06-10 09:42:03 y_server.py:595 Action chunk #0 generated | Total time: 140.20ms
+INFO 2026-06-10 09:42:04 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:04 y_server.py:564 Running inference for observation #12 (must_go: False)
+INFO 2026-06-10 09:42:04 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:04 y_server.py:873 Preprocessing and inference took 0.1630s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:04 y_server.py:922 Observation 12 | Total time: 170.24ms
+INFO 2026-06-10 09:42:04 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.013862609863281, -0.24937748908996582, 2.6321678161621094, -1.5248584747314453, 4.812250137329102, 0.9339454174041748] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:04 y_server.py:595 Action chunk #12 generated | Total time: 171.16ms
+INFO 2026-06-10 09:42:04 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:05 y_server.py:564 Running inference for observation #16 (must_go: False)
+INFO 2026-06-10 09:42:05 y_server.py:873 Preprocessing and inference took 0.1612s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:05 y_server.py:922 Observation 16 | Total time: 168.90ms
+INFO 2026-06-10 09:42:05 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.806407928466797, 1.7902624607086182, 2.8760108947753906, -1.6003398895263672, 3.8991355895996094, 0.9835350513458252] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:05 y_server.py:595 Action chunk #16 generated | Total time: 169.79ms
+INFO 2026-06-10 09:42:05 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:05 y_server.py:564 Running inference for observation #27 (must_go: False)
+INFO 2026-06-10 09:42:05 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:05 y_server.py:873 Preprocessing and inference took 0.1623s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:05 y_server.py:922 Observation 27 | Total time: 169.25ms
+INFO 2026-06-10 09:42:05 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.937192916870117, -4.084018230438232, 6.903072357177734, -2.692882537841797, 3.9098281860351562, 1.0082056522369385] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:05 y_server.py:595 Action chunk #27 generated | Total time: 170.17ms
+INFO 2026-06-10 09:42:05 y_server.py:564 Running inference for observation #29 (must_go: False)
+INFO 2026-06-10 09:42:06 y_server.py:873 Preprocessing and inference took 0.1610s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:06 y_server.py:922 Observation 29 | Total time: 167.71ms
+INFO 2026-06-10 09:42:06 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.454952239990234, -3.4219017028808594, 4.430259704589844, -2.6955127716064453, 5.188442230224609, 0.9579305648803711] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:06 y_server.py:595 Action chunk #29 generated | Total time: 168.60ms
+INFO 2026-06-10 09:42:06 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:06 y_server.py:564 Running inference for observation #40 (must_go: False)
+INFO 2026-06-10 09:42:06 y_server.py:873 Preprocessing and inference took 0.1594s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:06 y_server.py:922 Observation 40 | Total time: 162.57ms
+INFO 2026-06-10 09:42:06 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.695653915405273, -3.068735122680664, 6.108707427978516, -3.6694297790527344, 4.449626922607422, 0.9022049903869629] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:06 y_server.py:595 Action chunk #40 generated | Total time: 163.49ms
+INFO 2026-06-10 09:42:06 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:06 y_server.py:564 Running inference for observation #42 (must_go: False)
+INFO 2026-06-10 09:42:06 y_server.py:873 Preprocessing and inference took 0.1590s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:06 y_server.py:922 Observation 42 | Total time: 165.85ms
+INFO 2026-06-10 09:42:06 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.438323974609375, 0.9839721918106079, 0.6104602813720703, -3.0587024688720703, 3.4063758850097656, 0.9196276664733887] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:06 y_server.py:595 Action chunk #42 generated | Total time: 166.79ms
+INFO 2026-06-10 09:42:07 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:07 y_server.py:564 Running inference for observation #53 (must_go: False)
+INFO 2026-06-10 09:42:07 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:07 y_server.py:873 Preprocessing and inference took 0.1647s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:07 y_server.py:922 Observation 53 | Total time: 171.95ms
+INFO 2026-06-10 09:42:07 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.694381713867188, -6.671471118927002, 5.710939407348633, -2.4826431274414062, 5.271503448486328, 1.0304527282714844] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:07 y_server.py:595 Action chunk #53 generated | Total time: 172.89ms
+INFO 2026-06-10 09:42:07 y_server.py:564 Running inference for observation #55 (must_go: False)
+INFO 2026-06-10 09:42:07 y_server.py:873 Preprocessing and inference took 0.1594s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:07 y_server.py:922 Observation 55 | Total time: 166.35ms
+INFO 2026-06-10 09:42:07 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.121843338012695, -3.1327929496765137, 2.505422592163086, -1.6343612670898438, 5.666538238525391, 1.0128355026245117] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:07 y_server.py:595 Action chunk #55 generated | Total time: 167.28ms
+INFO 2026-06-10 09:42:08 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:08 y_server.py:564 Running inference for observation #66 (must_go: False)
+INFO 2026-06-10 09:42:08 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:08 y_server.py:873 Preprocessing and inference took 0.1641s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:08 y_server.py:922 Observation 66 | Total time: 171.94ms
+INFO 2026-06-10 09:42:08 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.02672004699707, 1.223936676979065, 0.38625144958496094, -2.560586929321289, 2.5004405975341797, 1.0196423530578613] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:08 y_server.py:595 Action chunk #66 generated | Total time: 172.88ms
+INFO 2026-06-10 09:42:08 y_server.py:564 Running inference for observation #68 (must_go: False)
+INFO 2026-06-10 09:42:08 y_server.py:873 Preprocessing and inference took 0.1593s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:08 y_server.py:922 Observation 68 | Total time: 166.63ms
+INFO 2026-06-10 09:42:08 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.220710754394531, 6.063848495483398,-4.964853286743164, -2.3297481536865234, 2.7256031036376953, 1.0554659366607666] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:08 y_server.py:595 Action chunk #68 generated | Total time: 167.56ms
+INFO 2026-06-10 09:42:09 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:09 y_server.py:564 Running inference for observation #79 (must_go: False)
+INFO 2026-06-10 09:42:09 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:09 y_server.py:873 Preprocessing and inference took 0.1639s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:09 y_server.py:922 Observation 79 | Total time: 171.78ms
+INFO 2026-06-10 09:42:09 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.80413818359375, 2.227811813354492, -1.5276432037353516, -0.8903980255126953, 3.0086097717285156, 0.934819221496582] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:09 y_server.py:595 Action chunk #79 generated | Total time: 172.71ms
+INFO 2026-06-10 09:42:09 y_server.py:564 Running inference for observation #81 (must_go: False)
+INFO 2026-06-10 09:42:09 y_server.py:873 Preprocessing and inference took 0.1606s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:09 y_server.py:922 Observation 81 | Total time: 165.63ms
+INFO 2026-06-10 09:42:09 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.741397857666016, 0.1561264991760254, 0.5205917358398438, -1.1631011962890625, 2.777711868286133, 0.9250123500823975] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:09 y_server.py:595 Action chunk #81 generated | Total time: 166.58ms
+INFO 2026-06-10 09:42:10 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:10 y_server.py:564 Running inference for observation #92 (must_go: False)
+INFO 2026-06-10 09:42:10 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:10 y_server.py:873 Preprocessing and inference took 0.1637s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:10 y_server.py:922 Observation 92 | Total time: 170.72ms
+INFO 2026-06-10 09:42:10 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-9.134712219238281, -0.08475351333618164, 2.729290008544922, -2.148580551147461, 2.522184371948242, 0.9819145202636719] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:10 y_server.py:595 Action chunk #92 generated | Total time: 171.65ms
+INFO 2026-06-10 09:42:10 y_server.py:564 Running inference for observation #94 (must_go: False)
+INFO 2026-06-10 09:42:10 y_server.py:873 Preprocessing and inference took 0.1596s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:10 y_server.py:922 Observation 94 | Total time: 162.90ms
+INFO 2026-06-10 09:42:10 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.23066520690918, -1.6903891563415527, 2.0727577209472656, 0.010982513427734375, -1.9456043243408203, 0.9361774921417236] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:10 y_server.py:595 Action chunk #94 generated | Total time: 163.82ms
+INFO 2026-06-10 09:42:10 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:10 y_server.py:564 Running inference for observation #105 (must_go: False)
+INFO 2026-06-10 09:42:11 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:11 y_server.py:873 Preprocessing and inference took 0.1652s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:11 y_server.py:922 Observation 105 | Total time: 168.63ms
+INFO 2026-06-10 09:42:11 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-9.13803482055664, -1.2898855209350586, 0.6622486114501953, 1.7593841552734375, 1.543731689453125, 0.936316728591919] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:11 y_server.py:595 Action chunk #105 generated | Total time: 169.54ms
+INFO 2026-06-10 09:42:11 y_server.py:564 Running inference for observation #107 (must_go: False)
+INFO 2026-06-10 09:42:11 y_server.py:873 Preprocessing and inference took 0.1593s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:11 y_server.py:922 Observation 107 | Total time: 166.58ms
+INFO 2026-06-10 09:42:11 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.677009582519531, 2.5196754932403564, -1.3566112518310547, 1.473052978515625, 2.103687286376953, 0.9541184902191162] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:11 y_server.py:595 Action chunk #107 generated | Total time: 167.53ms
+INFO 2026-06-10 09:42:11 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:11 y_server.py:564 Running inference for observation #118 (must_go: False)
+INFO 2026-06-10 09:42:11 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:12 y_server.py:873 Preprocessing and inference took 0.1641s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:12 y_server.py:922 Observation 118 | Total time: 171.31ms
+INFO 2026-06-10 09:42:12 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.535087585449219, 2.49629807472229, -2.553102493286133, 1.5757026672363281, 1.502279281616211, 0.9773349761962891] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:12 y_server.py:595 Action chunk #118 generated | Total time: 172.24ms
+INFO 2026-06-10 09:42:12 y_server.py:564 Running inference for observation #120 (must_go: False)
+INFO 2026-06-10 09:42:12 y_server.py:873 Preprocessing and inference took 0.1608s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:12 y_server.py:922 Observation 120 | Total time: 165.70ms
+INFO 2026-06-10 09:42:12 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.313613891601562, 1.3856874704360962, -2.521036148071289, 2.13958740234375, -2.7264270782470703, 0.9635922908782959] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:12 y_server.py:595 Action chunk #120 generated | Total time: 166.65ms
+INFO 2026-06-10 09:42:12 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:12 y_server.py:564 Running inference for observation #131 (must_go: False)
+INFO 2026-06-10 09:42:12 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:12 y_server.py:873 Preprocessing and inference took 0.1628s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:12 y_server.py:922 Observation 131 | Total time: 170.53ms
+INFO 2026-06-10 09:42:12 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.098567962646484, -3.0381340980529785, 3.8332557678222656, 0.807281494140625, -1.0593585968017578, 0.9095261096954346] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:12 y_server.py:595 Action chunk #131 generated | Total time: 171.47ms
+INFO 2026-06-10 09:42:12 y_server.py:564 Running inference for observation #133 (must_go: False)
+INFO 2026-06-10 09:42:13 y_server.py:873 Preprocessing and inference took 0.1614s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:13 y_server.py:922 Observation 133 | Total time: 165.51ms
+INFO 2026-06-10 09:42:13 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.043676376342773, -2.724673271179199, 3.302286148071289, 0.9475440979003906, -0.1298694610595703, 0.9462978839874268] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:13 y_server.py:595 Action chunk #133 generated | Total time: 166.48ms
+INFO 2026-06-10 09:42:13 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:13 y_server.py:564 Running inference for observation #144 (must_go: False)
+INFO 2026-06-10 09:42:13 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:13 y_server.py:873 Preprocessing and inference took 0.1628s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:13 y_server.py:922 Observation 144 | Total time: 166.23ms
+INFO 2026-06-10 09:42:13 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-9.65182113647461, -3.00022554397583, 2.8352184295654297, 0.6763038635253906, 1.8226947784423828, 1.0700476169586182] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:13 y_server.py:595 Action chunk #144 generated | Total time: 167.14ms
+INFO 2026-06-10 09:42:13 y_server.py:564 Running inference for observation #146 (must_go: False)
+INFO 2026-06-10 09:42:14 y_server.py:873 Preprocessing and inference took 0.1603s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:14 y_server.py:922 Observation 146 | Total time: 167.14ms
+INFO 2026-06-10 09:42:14 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.318077087402344, -1.9178566932678223, 2.026247024536133, 0.59246826171875, 2.5257034301757812, 0.9992127418518066] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:14 y_server.py:595 Action chunk #146 generated | Total time: 168.14ms
+INFO 2026-06-10 09:42:14 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:14 y_server.py:564 Running inference for observation #157 (must_go: False)
+INFO 2026-06-10 09:42:14 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:14 y_server.py:873 Preprocessing and inference took 0.1633s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:14 y_server.py:922 Observation 157 | Total time: 166.57ms
+INFO 2026-06-10 09:42:14 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.704494476318359, -2.377249240875244, 2.9854888916015625, 0.8821029663085938, -0.8792610168457031, 0.9609975814819336] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:14 y_server.py:595 Action chunk #157 generated | Total time: 167.51ms
+INFO 2026-06-10 09:42:14 y_server.py:564 Running inference for observation #159 (must_go: False)
+INFO 2026-06-10 09:42:14 y_server.py:873 Preprocessing and inference took 0.1604s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:14 y_server.py:922 Observation 159 | Total time: 167.45ms
+INFO 2026-06-10 09:42:14 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.2130126953125, -1.1394259929656982,0.7654075622558594, 0.9959373474121094, 0.3126106262207031, 0.9845340251922607] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:14 y_server.py:595 Action chunk #159 generated | Total time: 168.39ms
+INFO 2026-06-10 09:42:15 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:15 y_server.py:564 Running inference for observation #170 (must_go: False)
+INFO 2026-06-10 09:42:15 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:15 y_server.py:873 Preprocessing and inference took 0.1624s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:15 y_server.py:922 Observation 170 | Total time: 165.71ms
+INFO 2026-06-10 09:42:15 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.7549591064453125, -6.9397196769714355, 3.52398681640625, 0.20380020141601562, 0.060100555419921875, 1.0110225677490234] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:15 y_server.py:595 Action chunk #170 generated | Total time: 166.62ms
+INFO 2026-06-10 09:42:15 y_server.py:564 Running inference for observation #172 (must_go: False)
+INFO 2026-06-10 09:42:15 y_server.py:873 Preprocessing and inference took 0.1604s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:15 y_server.py:922 Observation 172 | Total time: 167.24ms
+INFO 2026-06-10 09:42:15 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.192258834838867, -3.9556379318237305, 1.6995868682861328, 1.0293998718261719, 0.35690879821777344, 0.9156734943389893] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:15 y_server.py:595 Action chunk #172 generated | Total time: 168.17ms
+INFO 2026-06-10 09:42:16 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:16 y_server.py:564 Running inference for observation #183 (must_go: False)
+INFO 2026-06-10 09:42:16 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:16 y_server.py:873 Preprocessing and inference took 0.1628s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:16 y_server.py:922 Observation 183 | Total time: 166.07ms
+INFO 2026-06-10 09:42:16 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.68256950378418, -4.3960185050964355, 4.687726974487305, -0.7659931182861328, -0.7554073333740234, 1.0193681716918945] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:16 y_server.py:595 Action chunk #183 generated | Total time: 166.98ms
+INFO 2026-06-10 09:42:16 y_server.py:564 Running inference for observation #185 (must_go: False)
+INFO 2026-06-10 09:42:16 y_server.py:873 Preprocessing and inference took 0.1612s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:16 y_server.py:922 Observation 185 | Total time: 165.79ms
+INFO 2026-06-10 09:42:16 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.134496688842773, -3.820291042327881, 3.9483604431152344, -0.8359642028808594, 0.16417312622070312, 0.9467425346374512] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:16 y_server.py:595 Action chunk #185 generated | Total time: 166.71ms
+INFO 2026-06-10 09:42:17 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:17 y_server.py:564 Running inference for observation #196 (must_go: False)
+INFO 2026-06-10 09:42:17 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:17 y_server.py:873 Preprocessing and inference took 0.1628s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:17 y_server.py:922 Observation 196 | Total time: 166.10ms
+INFO 2026-06-10 09:42:17 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-9.012641906738281, -5.118219375610352, 5.575788497924805, -2.0719757080078125, 1.8955421447753906, 1.0163097381591797] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:17 y_server.py:595 Action chunk #196 generated | Total time: 167.02ms
+INFO 2026-06-10 09:42:17 y_server.py:564 Running inference for observation #198 (must_go: False)
+INFO 2026-06-10 09:42:17 y_server.py:873 Preprocessing and inference took 0.1603s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:17 y_server.py:922 Observation 198 | Total time: 166.92ms
+INFO 2026-06-10 09:42:17 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.338506698608398, -3.301619052886963, 3.831989288330078, -1.7712383270263672, 3.307941436767578, 0.8498005867004395] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:17 y_server.py:595 Action chunk #198 generated | Total time: 167.83ms
+INFO 2026-06-10 09:42:17 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:18 y_server.py:564 Running inference for observation #209 (must_go: False)
+INFO 2026-06-10 09:42:18 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:18 y_server.py:873 Preprocessing and inference took 0.1628s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:18 y_server.py:922 Observation 209 | Total time: 170.18ms
+INFO 2026-06-10 09:42:18 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.153921127319336, -1.7309608459472656, 1.822967529296875, -1.4371929168701172, 3.0209808349609375, 0.9705066680908203] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:18 y_server.py:595 Action chunk #209 generated | Total time: 171.10ms
+INFO 2026-06-10 09:42:18 y_server.py:564 Running inference for observation #211 (must_go: False)
+INFO 2026-06-10 09:42:18 y_server.py:873 Preprocessing and inference took 0.1595s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:18 y_server.py:922 Observation 211 | Total time: 164.72ms
+INFO 2026-06-10 09:42:18 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.051651000976562, 2.0435240268707275, -2.3961925506591797, -1.1243629455566406, 2.054769515991211, 0.9925422668457031] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:18 y_server.py:595 Action chunk #211 generated | Total time: 165.62ms
+INFO 2026-06-10 09:42:18 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:18 y_server.py:564 Running inference for observation #222 (must_go: False)
+INFO 2026-06-10 09:42:18 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:19 y_server.py:873 Preprocessing and inference took 0.1629s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:19 y_server.py:922 Observation 222 | Total time: 170.45ms
+INFO 2026-06-10 09:42:19 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-10.725666999816895, 1.1570544242858887, 1.5031623840332031, -5.19959831237793, 3.3495540618896484, 1.0263822078704834] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:19 y_server.py:595 Action chunk #222 generated | Total time: 171.42ms
+INFO 2026-06-10 09:42:19 y_server.py:564 Running inference for observation #224 (must_go: False)
+INFO 2026-06-10 09:42:19 y_server.py:873 Preprocessing and inference took 0.1590s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:19 y_server.py:922 Observation 224 | Total time: 165.22ms
+INFO 2026-06-10 09:42:19 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-9.80537223815918, 1.0203059911727905,3.045391082763672, -4.485755920410156, 3.8229541778564453, 0.9550716876983643] | Payload size: 31237 bytes
+INFO 2026-06-10 09:42:19 y_server.py:595 Action chunk #224 generated | Total time: 166.11ms
+INFO 2026-06-10 09:42:19 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:19 y_server.py:564 Running inference for observation #235 (must_go: False)
+INFO 2026-06-10 09:42:19 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:19 y_server.py:873 Preprocessing and inference took 0.1621s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:19 y_server.py:922 Observation 235 | Total time: 165.41ms
+INFO 2026-06-10 09:42:19 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.918014526367188, 1.9615267515182495, -1.8748912811279297, -0.2797698974609375, 6.809516906738281, 0.9812111854553223] | Payload size: 31246 bytes
+INFO 2026-06-10 09:42:19 y_server.py:595 Action chunk #235 generated | Total time: 166.31ms
+INFO 2026-06-10 09:42:19 y_server.py:564 Running inference for observation #237 (must_go: False)
+INFO 2026-06-10 09:42:20 y_server.py:873 Preprocessing and inference took 0.1597s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:20 y_server.py:922 Observation 237 | Total time: 164.68ms
+INFO 2026-06-10 09:42:20 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.866138458251953, 2.222784996032715,-0.7579498291015625, -1.354522705078125, 5.596048355102539, 1.0581269264221191] | Payload size: 31248 bytes
+INFO 2026-06-10 09:42:20 y_server.py:595 Action chunk #237 generated | Total time: 165.60ms
+INFO 2026-06-10 09:42:20 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:20 y_server.py:564 Running inference for observation #248 (must_go: False)
+INFO 2026-06-10 09:42:20 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:20 y_server.py:873 Preprocessing and inference took 0.1627s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:20 y_server.py:922 Observation 248 | Total time: 165.97ms
+INFO 2026-06-10 09:42:20 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.408559799194336, -1.7995047569274902, 2.5692615509033203, -2.4340686798095703, -0.7478084564208984, 1.0010201930999756] | Payload size: 31259 bytes
+INFO 2026-06-10 09:42:20 y_server.py:595 Action chunk #248 generated | Total time: 166.89ms
+INFO 2026-06-10 09:42:20 y_server.py:564 Running inference for observation #250 (must_go: False)
+INFO 2026-06-10 09:42:20 y_server.py:873 Preprocessing and inference took 0.1591s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:20 y_server.py:922 Observation 250 | Total time: 165.32ms
+INFO 2026-06-10 09:42:20 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.243595123291016, -3.889176368713379, 3.264677047729492, -2.0832595825195312, 1.1141109466552734, 0.9811246395111084] | Payload size: 31261 bytes
+INFO 2026-06-10 09:42:20 y_server.py:595 Action chunk #250 generated | Total time: 166.25ms
+INFO 2026-06-10 09:42:21 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:21 y_server.py:564 Running inference for observation #261 (must_go: False)
+INFO 2026-06-10 09:42:21 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:21 y_server.py:873 Preprocessing and inference took 0.1626s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:21 y_server.py:922 Observation 261 | Total time: 169.74ms
+INFO 2026-06-10 09:42:21 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.914241790771484, -5.246956825256348, 4.438875198364258, -2.8197879791259766, 3.3301048278808594, 0.9669709205627441] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:21 y_server.py:595 Action chunk #261 generated | Total time: 170.66ms
+INFO 2026-06-10 09:42:21 y_server.py:564 Running inference for observation #263 (must_go: False)
+INFO 2026-06-10 09:42:21 y_server.py:873 Preprocessing and inference took 0.1602s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:21 y_server.py:922 Observation 263 | Total time: 166.43ms
+INFO 2026-06-10 09:42:21 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.589067459106445, -3.807663917541504, 5.277153015136719, -1.7142257690429688, 3.097013473510742, 0.9369337558746338] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:21 y_server.py:595 Action chunk #263 generated | Total time: 167.37ms
+INFO 2026-06-10 09:42:22 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:22 y_server.py:564 Running inference for observation #274 (must_go: False)
+INFO 2026-06-10 09:42:22 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:22 y_server.py:873 Preprocessing and inference took 0.1629s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:22 y_server.py:922 Observation 274 | Total time: 166.29ms
+INFO 2026-06-10 09:42:22 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.403430938720703, -2.7523679733276367, 3.7143478393554688, -3.6467056274414062, 4.5321807861328125, 0.9578518867492676] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:22 y_server.py:595 Action chunk #274 generated | Total time: 167.20ms
+INFO 2026-06-10 09:42:22 y_server.py:564 Running inference for observation #276 (must_go: False)
+INFO 2026-06-10 09:42:22 y_server.py:873 Preprocessing and inference took 0.1591s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:22 y_server.py:922 Observation 276 | Total time: 164.61ms
+INFO 2026-06-10 09:42:22 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.078411102294922, -0.7568273544311523, 3.725522994995117, -2.969308853149414, 5.261150360107422, 0.9546911716461182] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:22 y_server.py:595 Action chunk #276 generated | Total time: 165.54ms
+INFO 2026-06-10 09:42:23 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:23 y_server.py:564 Running inference for observation #287 (must_go: False)
+INFO 2026-06-10 09:42:23 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:23 y_server.py:873 Preprocessing and inference took 0.1624s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:23 y_server.py:922 Observation 287 | Total time: 169.79ms
+INFO 2026-06-10 09:42:23 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.163249969482422, -1.3743791580200195, 0.9769020080566406, -1.0197181701660156, 5.992101669311523, 0.9765214920043945] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:23 y_server.py:595 Action chunk #287 generated | Total time: 170.71ms
+INFO 2026-06-10 09:42:23 y_server.py:564 Running inference for observation #289 (must_go: False)
+INFO 2026-06-10 09:42:23 y_server.py:873 Preprocessing and inference took 0.1612s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:23 y_server.py:922 Observation 289 | Total time: 168.58ms
+INFO 2026-06-10 09:42:23 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.9079437255859375, -2.41740083694458, 2.4422340393066406, -0.9433250427246094, 6.465087890625, 1.0409765243530273] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:23 y_server.py:595 Action chunk #289 generated | Total time: 169.51ms
+INFO 2026-06-10 09:42:24 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:24 y_server.py:564 Running inference for observation #300 (must_go: False)
+INFO 2026-06-10 09:42:24 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:24 y_server.py:873 Preprocessing and inference took 0.1605s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:24 y_server.py:922 Observation 300 | Total time: 167.03ms
+INFO 2026-06-10 09:42:24 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.527151107788086, 1.219848394393921,0.6545391082763672, -0.2928352355957031, 5.777095794677734, 1.042518138885498] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:24 y_server.py:595 Action chunk #300 generated | Total time: 167.93ms
+INFO 2026-06-10 09:42:24 y_server.py:564 Running inference for observation #302 (must_go: False)
+INFO 2026-06-10 09:42:24 y_server.py:873 Preprocessing and inference took 0.1610s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:24 y_server.py:922 Observation 302 | Total time: 167.56ms
+INFO 2026-06-10 09:42:24 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.160135269165039, 2.8332581520080566, -2.7156620025634766, 0.9422760009765625, 4.947885513305664, 1.000903844833374] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:24 y_server.py:595 Action chunk #302 generated | Total time: 168.44ms
+INFO 2026-06-10 09:42:25 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:25 y_server.py:564 Running inference for observation #313 (must_go: False)
+INFO 2026-06-10 09:42:25 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:25 y_server.py:873 Preprocessing and inference took 0.1627s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:25 y_server.py:922 Observation 313 | Total time: 167.87ms
+INFO 2026-06-10 09:42:25 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.137823104858398, -4.64828634262085,9.532842636108398, -3.102235794067383, 5.952768325805664, 0.9971058368682861] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:25 y_server.py:595 Action chunk #313 generated | Total time: 168.78ms
+INFO 2026-06-10 09:42:25 y_server.py:564 Running inference for observation #315 (must_go: False)
+INFO 2026-06-10 09:42:25 y_server.py:873 Preprocessing and inference took 0.1608s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:25 y_server.py:922 Observation 315 | Total time: 167.54ms
+INFO 2026-06-10 09:42:25 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.659646987915039, -9.342840194702148, 15.065759658813477, -4.080678939819336, 5.372837066650391, 0.9643547534942627] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:25 y_server.py:595 Action chunk #315 generated | Total time: 168.46ms
+INFO 2026-06-10 09:42:25 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:25 y_server.py:564 Running inference for observation #326 (must_go: False)
+INFO 2026-06-10 09:42:26 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:26 y_server.py:873 Preprocessing and inference took 0.1623s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:26 y_server.py:922 Observation 326 | Total time: 167.72ms
+INFO 2026-06-10 09:42:26 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.5253448486328125, -0.07322525978088379, 3.072183609008789, -2.6860923767089844, -1.2358016967773438, 1.0095832347869873] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:26 y_server.py:595 Action chunk #326 generated | Total time: 168.65ms
+INFO 2026-06-10 09:42:26 y_server.py:564 Running inference for observation #328 (must_go: False)
+INFO 2026-06-10 09:42:26 y_server.py:873 Preprocessing and inference took 0.1616s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:26 y_server.py:922 Observation 328 | Total time: 165.97ms
+INFO 2026-06-10 09:42:26 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.422149658203125, 0.3194565773010254, 2.063648223876953, -2.142210006713867, 0.5851421356201172, 1.0544357299804688] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:26 y_server.py:595 Action chunk #328 generated | Total time: 166.87ms
+INFO 2026-06-10 09:42:26 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:26 y_server.py:564 Running inference for observation #339 (must_go: False)
+INFO 2026-06-10 09:42:26 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:27 y_server.py:873 Preprocessing and inference took 0.1618s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:27 y_server.py:922 Observation 339 | Total time: 168.60ms
+INFO 2026-06-10 09:42:27 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.735979080200195, -3.598294258117676, 5.649648666381836, -1.562704086303711, 0.3498973846435547, 1.0035831928253174] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:27 y_server.py:595 Action chunk #339 generated | Total time: 169.52ms
+INFO 2026-06-10 09:42:27 y_server.py:564 Running inference for observation #341 (must_go: False)
+INFO 2026-06-10 09:42:27 y_server.py:873 Preprocessing and inference took 0.1612s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:27 y_server.py:922 Observation 341 | Total time: 165.19ms
+INFO 2026-06-10 09:42:27 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.075523376464844, -1.7351579666137695, 4.2811279296875, -2.2308311462402344, -0.5367259979248047, 0.97202467918396] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:27 y_server.py:595 Action chunk #341 generated | Total time: 166.09ms
+INFO 2026-06-10 09:42:27 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:27 y_server.py:564 Running inference for observation #352 (must_go: False)
+INFO 2026-06-10 09:42:27 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:27 y_server.py:873 Preprocessing and inference took 0.1609s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:27 y_server.py:922 Observation 352 | Total time: 167.62ms
+INFO 2026-06-10 09:42:27 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.08720588684082, -8.14004898071289, 12.314598083496094, -5.463817596435547, 0.9944534301757812, 1.0532801151275635] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:27 y_server.py:595 Action chunk #352 generated | Total time: 168.54ms
+INFO 2026-06-10 09:42:27 y_server.py:564 Running inference for observation #354 (must_go: False)
+INFO 2026-06-10 09:42:28 y_server.py:873 Preprocessing and inference took 0.1614s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:28 y_server.py:922 Observation 354 | Total time: 166.36ms
+INFO 2026-06-10 09:42:28 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.269048690795898, -6.646721363067627, 9.728857040405273, -4.784425735473633, 1.1021156311035156, 0.9644160270690918] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:28 y_server.py:595 Action chunk #354 generated | Total time: 167.28ms
+INFO 2026-06-10 09:42:28 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:28 y_server.py:564 Running inference for observation #365 (must_go: False)
+INFO 2026-06-10 09:42:28 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:28 y_server.py:873 Preprocessing and inference took 0.1615s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:28 y_server.py:922 Observation 365 | Total time: 167.62ms
+INFO 2026-06-10 09:42:28 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.104848861694336, -5.4451985359191895, 9.114709854125977, -5.698738098144531, 2.750032424926758, 1.0527267456054688] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:28 y_server.py:595 Action chunk #365 generated | Total time: 168.56ms
+INFO 2026-06-10 09:42:28 y_server.py:564 Running inference for observation #367 (must_go: False)
+INFO 2026-06-10 09:42:28 y_server.py:873 Preprocessing and inference took 0.1604s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:28 y_server.py:922 Observation 367 | Total time: 167.02ms
+INFO 2026-06-10 09:42:28 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.248603820800781, -5.535720348358154, 8.435955047607422, -5.538841247558594, 2.6814002990722656, 0.9123671054840088] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:28 y_server.py:595 Action chunk #367 generated | Total time: 167.91ms
+INFO 2026-06-10 09:42:29 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:29 y_server.py:564 Running inference for observation #378 (must_go: False)
+INFO 2026-06-10 09:42:29 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:29 y_server.py:873 Preprocessing and inference took 0.1623s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:29 y_server.py:922 Observation 378 | Total time: 167.91ms
+INFO 2026-06-10 09:42:29 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-5.960424423217773, -5.66240930557251,9.50511360168457, -5.8057098388671875, 2.4530277252197266, 0.8704543113708496] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:29 y_server.py:595 Action chunk #378 generated | Total time: 168.82ms
+INFO 2026-06-10 09:42:29 y_server.py:564 Running inference for observation #380 (must_go: False)
+INFO 2026-06-10 09:42:29 y_server.py:873 Preprocessing and inference took 0.1611s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:29 y_server.py:922 Observation 380 | Total time: 165.61ms
+INFO 2026-06-10 09:42:29 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.032794952392578, -5.0988593101501465, 7.90315055847168, -4.2906646728515625, 2.7086181640625, 0.8901517391204834] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:29 y_server.py:595 Action chunk #380 generated | Total time: 166.51ms
+INFO 2026-06-10 09:42:30 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:30 y_server.py:564 Running inference for observation #391 (must_go: False)
+INFO 2026-06-10 09:42:30 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:30 y_server.py:873 Preprocessing and inference took 0.1615s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:30 y_server.py:922 Observation 391 | Total time: 168.24ms
+INFO 2026-06-10 09:42:30 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-5.657047271728516, -0.9639022350311279, 4.210420608520508, -3.2436962127685547, 1.5051555633544922, 0.9547114372253418] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:30 y_server.py:595 Action chunk #391 generated | Total time: 169.14ms
+INFO 2026-06-10 09:42:30 y_server.py:564 Running inference for observation #393 (must_go: False)
+INFO 2026-06-10 09:42:30 y_server.py:873 Preprocessing and inference took 0.1600s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:30 y_server.py:922 Observation 393 | Total time: 166.62ms
+INFO 2026-06-10 09:42:30 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.123313903808594, -0.48896360397338867, 2.928342819213867, -3.6884822845458984, 2.5926990509033203, 0.9978187084197998] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:30 y_server.py:595 Action chunk #393 generated | Total time: 167.54ms
+INFO 2026-06-10 09:42:31 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:31 y_server.py:564 Running inference for observation #404 (must_go: False)
+INFO 2026-06-10 09:42:31 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:31 y_server.py:873 Preprocessing and inference took 0.1628s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:31 y_server.py:922 Observation 404 | Total time: 168.87ms
+INFO 2026-06-10 09:42:31 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.897787094116211, 4.730885028839111,0.16144180297851562, -4.614589691162109, 4.572458267211914, 1.003098726272583] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:31 y_server.py:595 Action chunk #404 generated | Total time: 169.80ms
+INFO 2026-06-10 09:42:31 y_server.py:564 Running inference for observation #406 (must_go: False)
+INFO 2026-06-10 09:42:31 y_server.py:873 Preprocessing and inference took 0.1609s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:31 y_server.py:922 Observation 406 | Total time: 164.58ms
+INFO 2026-06-10 09:42:31 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.496522903442383, 3.058349847793579,2.724590301513672, -3.857269287109375, 4.672445297241211, 1.026404857635498] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:31 y_server.py:595 Action chunk #406 generated | Total time: 165.50ms
+INFO 2026-06-10 09:42:32 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:32 y_server.py:564 Running inference for observation #417 (must_go: False)
+INFO 2026-06-10 09:42:32 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:32 y_server.py:873 Preprocessing and inference took 0.1621s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:32 y_server.py:922 Observation 417 | Total time: 169.22ms
+INFO 2026-06-10 09:42:32 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-5.165367126464844, -1.0478250980377197, 5.375654220581055, -1.3820323944091797, 0.8879261016845703, 0.9565141201019287] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:32 y_server.py:595 Action chunk #417 generated | Total time: 170.14ms
+INFO 2026-06-10 09:42:32 y_server.py:564 Running inference for observation #419 (must_go: False)
+INFO 2026-06-10 09:42:32 y_server.py:873 Preprocessing and inference took 0.1600s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:32 y_server.py:922 Observation 419 | Total time: 163.90ms
+INFO 2026-06-10 09:42:32 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-4.565784454345703, -2.691452980041504, 7.200187683105469, -0.7085914611816406, -0.08818817138671875, 0.9172062873840332] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:32 y_server.py:595 Action chunk #419 generated | Total time: 164.81ms
+INFO 2026-06-10 09:42:32 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:32 y_server.py:564 Running inference for observation #430 (must_go: False)
+INFO 2026-06-10 09:42:33 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:33 y_server.py:873 Preprocessing and inference took 0.1631s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:33 y_server.py:922 Observation 430 | Total time: 169.87ms
+INFO 2026-06-10 09:42:33 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-5.342613220214844, -4.391972541809082, 4.379106521606445, -0.5354938507080078, -1.7029647827148438, 0.9803307056427002] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:33 y_server.py:595 Action chunk #430 generated | Total time: 170.80ms
+INFO 2026-06-10 09:42:33 y_server.py:564 Running inference for observation #432 (must_go: False)
+INFO 2026-06-10 09:42:33 y_server.py:873 Preprocessing and inference took 0.1608s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:33 y_server.py:922 Observation 432 | Total time: 164.73ms
+INFO 2026-06-10 09:42:33 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.263343811035156, -1.2851710319519043, 1.5503368377685547, 0.2862052917480469, -0.8955345153808594, 0.8910796642303467] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:33 y_server.py:595 Action chunk #432 generated | Total time: 165.66ms
+INFO 2026-06-10 09:42:33 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:33 y_server.py:564 Running inference for observation #443 (must_go: False)
+INFO 2026-06-10 09:42:33 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:33 y_server.py:873 Preprocessing and inference took 0.1622s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:33 y_server.py:922 Observation 443 | Total time: 169.18ms
+INFO 2026-06-10 09:42:33 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-5.785928726196289, -3.6651077270507812, 3.910825729370117, -1.7634468078613281, 4.000675201416016, 0.8811719417572021] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:33 y_server.py:595 Action chunk #443 generated | Total time: 170.11ms
+INFO 2026-06-10 09:42:34 y_server.py:564 Running inference for observation #445 (must_go: False)
+INFO 2026-06-10 09:42:34 y_server.py:873 Preprocessing and inference took 0.1598s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:34 y_server.py:922 Observation 445 | Total time: 166.20ms
+INFO 2026-06-10 09:42:34 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.696737289428711, -2.0587120056152344, 1.917633056640625, -0.8953323364257812, 2.9278602600097656, 0.9053425788879395] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:34 y_server.py:595 Action chunk #445 generated | Total time: 167.10ms
+INFO 2026-06-10 09:42:34 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:34 y_server.py:564 Running inference for observation #456 (must_go: False)
+INFO 2026-06-10 09:42:34 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:34 y_server.py:873 Preprocessing and inference took 0.1637s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:34 y_server.py:922 Observation 456 | Total time: 168.59ms
+INFO 2026-06-10 09:42:34 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.510845184326172, -3.898517608642578, 4.582063674926758, -3.9795989990234375, 4.411701202392578, 0.9023482799530029] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:34 y_server.py:595 Action chunk #456 generated | Total time: 169.51ms
+INFO 2026-06-10 09:42:34 y_server.py:564 Running inference for observation #458 (must_go: False)
+INFO 2026-06-10 09:42:35 y_server.py:873 Preprocessing and inference took 0.1604s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:35 y_server.py:922 Observation 458 | Total time: 166.77ms
+INFO 2026-06-10 09:42:35 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.397279739379883, -3.3042683601379395, 3.809499740600586, -2.607217788696289, 3.975208282470703, 0.9041955471038818] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:35 y_server.py:595 Action chunk #458 generated | Total time: 167.69ms
+INFO 2026-06-10 09:42:35 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:35 y_server.py:564 Running inference for observation #469 (must_go: False)
+INFO 2026-06-10 09:42:35 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:35 y_server.py:873 Preprocessing and inference took 0.1638s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:35 y_server.py:922 Observation 469 | Total time: 168.46ms
+INFO 2026-06-10 09:42:35 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.158449172973633, -5.633180141448975, 7.165712356567383, -3.2566967010498047, 5.472541809082031, 0.9085466861724854] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:35 y_server.py:595 Action chunk #469 generated | Total time: 169.39ms
+INFO 2026-06-10 09:42:35 y_server.py:564 Running inference for observation #471 (must_go: False)
+INFO 2026-06-10 09:42:36 y_server.py:873 Preprocessing and inference took 0.1611s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:36 y_server.py:922 Observation 471 | Total time: 167.51ms
+INFO 2026-06-10 09:42:36 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.681194305419922, -4.019486904144287, 5.3365936279296875, -3.3408260345458984, 6.338579177856445, 0.9482452869415283] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:36 y_server.py:595 Action chunk #471 generated | Total time: 168.54ms
+INFO 2026-06-10 09:42:36 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:36 y_server.py:564 Running inference for observation #482 (must_go: False)
+INFO 2026-06-10 09:42:36 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:36 y_server.py:873 Preprocessing and inference took 0.1631s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:36 y_server.py:922 Observation 482 | Total time: 168.40ms
+INFO 2026-06-10 09:42:36 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.322795867919922, -1.2440738677978516, 2.393819808959961, -3.4669227600097656, 8.538114547729492, 1.0153636932373047] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:36 y_server.py:595 Action chunk #482 generated | Total time: 169.37ms
+INFO 2026-06-10 09:42:36 y_server.py:564 Running inference for observation #484 (must_go: False)
+INFO 2026-06-10 09:42:36 y_server.py:873 Preprocessing and inference took 0.1602s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:36 y_server.py:922 Observation 484 | Total time: 166.94ms
+INFO 2026-06-10 09:42:36 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.818264007568359, -0.7259180545806885, 2.4725112915039062, -2.538990020751953, 8.610319137573242, 1.0408217906951904] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:36 y_server.py:595 Action chunk #484 generated | Total time: 167.87ms
+INFO 2026-06-10 09:42:37 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:37 y_server.py:564 Running inference for observation #495 (must_go: False)
+INFO 2026-06-10 09:42:37 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:37 y_server.py:873 Preprocessing and inference took 0.1630s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:37 y_server.py:922 Observation 495 | Total time: 169.84ms
+INFO 2026-06-10 09:42:37 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.869701385498047, -10.905586242675781, 12.025774002075195, -1.5919017791748047, 6.201374053955078, 0.972853422164917] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:37 y_server.py:595 Action chunk #495 generated | Total time: 170.78ms
+INFO 2026-06-10 09:42:37 y_server.py:564 Running inference for observation #497 (must_go: False)
+INFO 2026-06-10 09:42:37 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:37 y_server.py:873 Preprocessing and inference took 0.1604s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:37 y_server.py:922 Observation 497 | Total time: 166.61ms
+INFO 2026-06-10 09:42:37 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.021080017089844, -3.581648349761963, 4.425693511962891, -1.211404800415039, 6.552087783813477, 0.9947195053100586] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:37 y_server.py:595 Action chunk #497 generated | Total time: 167.52ms
+INFO 2026-06-10 09:42:37 y_server.py:564 Running inference for observation #499 (must_go: False)
+INFO 2026-06-10 09:42:37 y_server.py:873 Preprocessing and inference took 0.1595s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:37 y_server.py:922 Observation 499 | Total time: 166.23ms
+INFO 2026-06-10 09:42:37 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.554803848266602, 1.011741042137146,-0.7384357452392578, -1.1307792663574219, 5.926776885986328, 0.963672399520874] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:37 y_server.py:595 Action chunk #499 generated | Total time: 167.15ms
+INFO 2026-06-10 09:42:38 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:38 y_server.py:564 Running inference for observation #510 (must_go: False)
+INFO 2026-06-10 09:42:38 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:38 y_server.py:873 Preprocessing and inference took 0.1621s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:38 y_server.py:922 Observation 510 | Total time: 168.91ms
+INFO 2026-06-10 09:42:38 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.896074295043945, -1.2122204303741455, 1.0861167907714844, -0.4059104919433594, 4.217012405395508, 0.9576423168182373] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:38 y_server.py:595 Action chunk #510 generated | Total time: 169.82ms
+INFO 2026-06-10 09:42:38 y_server.py:564 Running inference for observation #512 (must_go: False)
+INFO 2026-06-10 09:42:38 y_server.py:873 Preprocessing and inference took 0.1604s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:38 y_server.py:922 Observation 512 | Total time: 164.29ms
+INFO 2026-06-10 09:42:38 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.333915710449219, -0.9346132278442383, 0.8253135681152344, -1.1225223541259766, 4.1349945068359375, 1.0214776992797852] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:38 y_server.py:595 Action chunk #512 generated | Total time: 165.24ms
+INFO 2026-06-10 09:42:39 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:39 y_server.py:564 Running inference for observation #523 (must_go: False)
+INFO 2026-06-10 09:42:39 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:39 y_server.py:873 Preprocessing and inference took 0.1619s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:39 y_server.py:922 Observation 523 | Total time: 165.08ms
+INFO 2026-06-10 09:42:39 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.226863861083984, -3.003894329071045, 0.31586456298828125, 0.22480010986328125, 4.345695495605469, 1.1029107570648193] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:39 y_server.py:595 Action chunk #523 generated | Total time: 166.01ms
+INFO 2026-06-10 09:42:39 y_server.py:564 Running inference for observation #525 (must_go: False)
+INFO 2026-06-10 09:42:39 y_server.py:873 Preprocessing and inference took 0.1600s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:39 y_server.py:922 Observation 525 | Total time: 165.58ms
+INFO 2026-06-10 09:42:39 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.210275650024414, -2.2526345252990723, 1.0401668548583984, 0.42816162109375, 3.4298343658447266, 0.9789628982543945] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:39 y_server.py:595 Action chunk #525 generated | Total time: 166.50ms
+INFO 2026-06-10 09:42:40 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:40 y_server.py:564 Running inference for observation #536 (must_go: False)
+INFO 2026-06-10 09:42:40 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:40 y_server.py:873 Preprocessing and inference took 0.1619s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:40 y_server.py:922 Observation 536 | Total time: 164.95ms
+INFO 2026-06-10 09:42:40 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.956928253173828, -3.749237060546875, 2.6547679901123047, 1.3466224670410156, 4.668720245361328, 0.916846513748169] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:40 y_server.py:595 Action chunk #536 generated | Total time: 165.86ms
+INFO 2026-06-10 09:42:40 y_server.py:564 Running inference for observation #538 (must_go: False)
+INFO 2026-06-10 09:42:40 y_server.py:873 Preprocessing and inference took 0.1595s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:40 y_server.py:922 Observation 538 | Total time: 166.13ms
+INFO 2026-06-10 09:42:40 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.004560470581055, -4.206411361694336, 2.9284210205078125, 0.4340705871582031, 4.3801727294921875, 0.9306941032409668] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:40 y_server.py:595 Action chunk #538 generated | Total time: 167.05ms
+INFO 2026-06-10 09:42:41 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:41 y_server.py:564 Running inference for observation #549 (must_go: False)
+INFO 2026-06-10 09:42:41 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:41 y_server.py:873 Preprocessing and inference took 0.1616s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:41 y_server.py:922 Observation 549 | Total time: 164.84ms
+INFO 2026-06-10 09:42:41 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-5.53101921081543, -2.7305760383605957, 4.010900497436523, -3.5833187103271484, 3.437816619873047, 0.8762187957763672] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:41 y_server.py:595 Action chunk #549 generated | Total time: 165.75ms
+INFO 2026-06-10 09:42:41 y_server.py:564 Running inference for observation #551 (must_go: False)
+INFO 2026-06-10 09:42:41 y_server.py:873 Preprocessing and inference took 0.1590s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:41 y_server.py:922 Observation 551 | Total time: 165.21ms
+INFO 2026-06-10 09:42:41 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.658245086669922, -1.0189549922943115, 1.7116928100585938, -2.685405731201172, 3.9646472930908203, 1.0131070613861084] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:41 y_server.py:595 Action chunk #551 generated | Total time: 166.10ms
+INFO 2026-06-10 09:42:41 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:41 y_server.py:564 Running inference for observation #562 (must_go: False)
+INFO 2026-06-10 09:42:42 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:42 y_server.py:873 Preprocessing and inference took 0.1621s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:42 y_server.py:922 Observation 562 | Total time: 165.21ms
+INFO 2026-06-10 09:42:42 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-3.9862937927246094, 0.10246706008911133, -0.7938785552978516, -0.377593994140625, 4.326976776123047, 1.0665147304534912] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:42 y_server.py:595 Action chunk #562 generated | Total time: 166.18ms
+INFO 2026-06-10 09:42:42 y_server.py:564 Running inference for observation #564 (must_go: False)
+INFO 2026-06-10 09:42:42 y_server.py:873 Preprocessing and inference took 0.1590s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:42 y_server.py:922 Observation 564 | Total time: 165.87ms
+INFO 2026-06-10 09:42:42 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-4.984132766723633, -0.7207698822021484, 1.1017723083496094, -1.7752552032470703, 4.043886184692383, 1.00455641746521] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:42 y_server.py:595 Action chunk #564 generated | Total time: 166.77ms
+INFO 2026-06-10 09:42:42 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:42 y_server.py:564 Running inference for observation #575 (must_go: False)
+INFO 2026-06-10 09:42:42 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:42 y_server.py:873 Preprocessing and inference took 0.1626s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:42 y_server.py:922 Observation 575 | Total time: 165.62ms
+INFO 2026-06-10 09:42:42 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.224189758300781, -0.462963342666626, 2.627779006958008, -3.1574459075927734, 6.061134338378906, 0.9646153450012207] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:42 y_server.py:595 Action chunk #575 generated | Total time: 166.55ms
+INFO 2026-06-10 09:42:43 y_server.py:564 Running inference for observation #577 (must_go: False)
+INFO 2026-06-10 09:42:43 y_server.py:873 Preprocessing and inference took 0.1594s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:43 y_server.py:922 Observation 577 | Total time: 166.22ms
+INFO 2026-06-10 09:42:43 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-4.972841262817383, 3.3481640815734863, -2.292440414428711, -2.9542198181152344, 0.4498577117919922, 1.020338773727417] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:43 y_server.py:595 Action chunk #577 generated | Total time: 167.15ms
+INFO 2026-06-10 09:42:43 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:43 y_server.py:564 Running inference for observation #588 (must_go: False)
+INFO 2026-06-10 09:42:43 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:43 y_server.py:873 Preprocessing and inference took 0.1614s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:43 y_server.py:922 Observation 588 | Total time: 168.42ms
+INFO 2026-06-10 09:42:43 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-5.143646240234375, 7.904488563537598,-5.406717300415039, -3.34625244140625, 5.006307601928711, 1.0018031597137451] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:43 y_server.py:595 Action chunk #588 generated | Total time: 169.40ms
+INFO 2026-06-10 09:42:43 y_server.py:564 Running inference for observation #590 (must_go: False)
+INFO 2026-06-10 09:42:44 y_server.py:873 Preprocessing and inference took 0.1607s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:44 y_server.py:922 Observation 590 | Total time: 166.62ms
+INFO 2026-06-10 09:42:44 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-4.996957778930664, 4.965488433837891,-2.207944869995117, -3.2992935180664062, 3.9518260955810547, 0.9279725551605225] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:44 y_server.py:595 Action chunk #590 generated | Total time: 167.54ms
+INFO 2026-06-10 09:42:44 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:44 y_server.py:564 Running inference for observation #601 (must_go: False)
+INFO 2026-06-10 09:42:44 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:44 y_server.py:873 Preprocessing and inference took 0.1625s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:44 y_server.py:922 Observation 601 | Total time: 169.60ms
+INFO 2026-06-10 09:42:44 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.410942077636719, -1.1880404949188232, 1.9947738647460938, -1.9958534240722656, 9.215847969055176, 0.9351069927215576] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:44 y_server.py:595 Action chunk #601 generated | Total time: 170.56ms
+INFO 2026-06-10 09:42:44 y_server.py:564 Running inference for observation #603 (must_go: False)
+INFO 2026-06-10 09:42:44 y_server.py:873 Preprocessing and inference took 0.1602s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:44 y_server.py:922 Observation 603 | Total time: 164.86ms
+INFO 2026-06-10 09:42:44 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.831087112426758, -2.722646713256836, 3.2266063690185547, -2.139230728149414, 7.55351448059082, 0.9454817771911621] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:44 y_server.py:595 Action chunk #603 generated | Total time: 165.80ms
+INFO 2026-06-10 09:42:45 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:45 y_server.py:564 Running inference for observation #614 (must_go: False)
+INFO 2026-06-10 09:42:45 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:45 y_server.py:873 Preprocessing and inference took 0.1630s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:45 y_server.py:922 Observation 614 | Total time: 169.11ms
+INFO 2026-06-10 09:42:45 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.847127914428711, -2.0861735343933105, 3.188861846923828, -3.640317916870117, 4.357326507568359, 0.9826445579528809] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:45 y_server.py:595 Action chunk #614 generated | Total time: 170.05ms
+INFO 2026-06-10 09:42:45 y_server.py:564 Running inference for observation #616 (must_go: False)
+INFO 2026-06-10 09:42:45 y_server.py:873 Preprocessing and inference took 0.1598s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:45 y_server.py:922 Observation 616 | Total time: 166.43ms
+INFO 2026-06-10 09:42:45 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.539970397949219, -3.3747706413269043, 3.0720596313476562, -2.965024948120117, 5.1437530517578125, 0.898148775100708] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:45 y_server.py:595 Action chunk #616 generated | Total time: 167.32ms
+INFO 2026-06-10 09:42:46 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:46 y_server.py:564 Running inference for observation #627 (must_go: False)
+INFO 2026-06-10 09:42:46 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:46 y_server.py:873 Preprocessing and inference took 0.1618s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:46 y_server.py:922 Observation 627 | Total time: 169.25ms
+INFO 2026-06-10 09:42:46 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.779243469238281, -2.2827672958374023, 3.032430648803711, -2.715564727783203, 5.195440292358398, 0.9117350578308105] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:46 y_server.py:595 Action chunk #627 generated | Total time: 170.19ms
+INFO 2026-06-10 09:42:46 y_server.py:564 Running inference for observation #629 (must_go: False)
+INFO 2026-06-10 09:42:46 y_server.py:873 Preprocessing and inference took 0.1599s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:46 y_server.py:922 Observation 629 | Total time: 166.34ms
+INFO 2026-06-10 09:42:46 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.051958084106445, -1.7012763023376465, 2.3441314697265625, -2.3926315307617188, 4.459011077880859, 0.9852414131164551] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:46 y_server.py:595 Action chunk #629 generated | Total time: 167.25ms
+INFO 2026-06-10 09:42:47 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:47 y_server.py:564 Running inference for observation #640 (must_go: False)
+INFO 2026-06-10 09:42:47 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:47 y_server.py:873 Preprocessing and inference took 0.1625s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:47 y_server.py:922 Observation 640 | Total time: 165.46ms
+INFO 2026-06-10 09:42:47 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.713512420654297, -2.3383803367614746, 5.88853645324707, -2.4883155822753906, 6.507228851318359, 1.0308737754821777] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:47 y_server.py:595 Action chunk #640 generated | Total time: 166.40ms
+INFO 2026-06-10 09:42:47 y_server.py:564 Running inference for observation #642 (must_go: False)
+INFO 2026-06-10 09:42:47 y_server.py:873 Preprocessing and inference took 0.1601s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:47 y_server.py:922 Observation 642 | Total time: 166.56ms
+INFO 2026-06-10 09:42:47 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.983905792236328, -4.598387241363525, 6.777765274047852, -2.235187530517578, 6.63194465637207, 0.9199388027191162] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:47 y_server.py:595 Action chunk #642 generated | Total time: 167.49ms
+INFO 2026-06-10 09:42:48 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:48 y_server.py:564 Running inference for observation #653 (must_go: False)
+INFO 2026-06-10 09:42:48 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:48 y_server.py:873 Preprocessing and inference took 0.1624s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:48 y_server.py:922 Observation 653 | Total time: 165.54ms
+INFO 2026-06-10 09:42:48 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.530675888061523, -0.15403079986572266, 0.89544677734375, -1.5989246368408203, 5.370763778686523, 1.0191307067871094] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:48 y_server.py:595 Action chunk #653 generated | Total time: 166.48ms
+INFO 2026-06-10 09:42:48 y_server.py:564 Running inference for observation #655 (must_go: False)
+INFO 2026-06-10 09:42:48 y_server.py:873 Preprocessing and inference took 0.1603s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:48 y_server.py:922 Observation 655 | Total time: 166.67ms
+INFO 2026-06-10 09:42:48 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.455596923828125, -0.4392249584197998, 1.7539653778076172, -0.9700431823730469, 5.478771209716797, 0.9684457778930664] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:48 y_server.py:595 Action chunk #655 generated | Total time: 167.63ms
+INFO 2026-06-10 09:42:48 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:48 y_server.py:564 Running inference for observation #666 (must_go: False)
+INFO 2026-06-10 09:42:49 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:49 y_server.py:873 Preprocessing and inference took 0.1627s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:49 y_server.py:922 Observation 666 | Total time: 169.65ms
+INFO 2026-06-10 09:42:49 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.728818893432617, 1.7910946607589722, -0.6583766937255859, 1.0324859619140625, 2.396484375, 0.9543633460998535] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:49 y_server.py:595 Action chunk #666 generated | Total time: 170.61ms
+INFO 2026-06-10 09:42:49 y_server.py:564 Running inference for observation #668 (must_go: False)
+INFO 2026-06-10 09:42:49 y_server.py:873 Preprocessing and inference took 0.1604s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:49 y_server.py:922 Observation 668 | Total time: 167.07ms
+INFO 2026-06-10 09:42:49 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.283174514770508, 3.0179829597473145, -3.535062789916992, 2.0564308166503906, 2.706573486328125, 0.9927594661712646] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:49 y_server.py:595 Action chunk #668 generated | Total time: 167.97ms
+INFO 2026-06-10 09:42:49 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:49 y_server.py:564 Running inference for observation #679 (must_go: False)
+INFO 2026-06-10 09:42:49 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:49 y_server.py:873 Preprocessing and inference took 0.1618s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:49 y_server.py:922 Observation 679 | Total time: 164.97ms
+INFO 2026-06-10 09:42:49 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.900493621826172, 2.5928637981414795, -1.8807621002197266, 3.6873626708984375, 4.578920364379883, 1.03647780418396] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:49 y_server.py:595 Action chunk #679 generated | Total time: 165.91ms
+INFO 2026-06-10 09:42:49 y_server.py:564 Running inference for observation #681 (must_go: False)
+INFO 2026-06-10 09:42:50 y_server.py:873 Preprocessing and inference took 0.1606s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:50 y_server.py:922 Observation 681 | Total time: 167.46ms
+INFO 2026-06-10 09:42:50 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.364353179931641, 3.0336198806762695, -3.5715808868408203, 4.139583587646484, 3.7517967224121094, 1.0626182556152344] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:50 y_server.py:595 Action chunk #681 generated | Total time: 168.40ms
+INFO 2026-06-10 09:42:50 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:50 y_server.py:564 Running inference for observation #692 (must_go: False)
+INFO 2026-06-10 09:42:50 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:50 y_server.py:873 Preprocessing and inference took 0.1615s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:50 y_server.py:922 Observation 692 | Total time: 168.17ms
+INFO 2026-06-10 09:42:50 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-7.096729278564453, -4.112582206726074, 0.28722381591796875, 3.7306976318359375, 2.252300262451172, 1.1291849613189697] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:50 y_server.py:595 Action chunk #692 generated | Total time: 169.13ms
+INFO 2026-06-10 09:42:50 y_server.py:564 Running inference for observation #694 (must_go: False)
+INFO 2026-06-10 09:42:51 y_server.py:873 Preprocessing and inference took 0.1616s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:51 y_server.py:922 Observation 694 | Total time: 166.92ms
+INFO 2026-06-10 09:42:51 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.992420196533203, -5.548923015594482, 1.5077590942382812, 2.797771453857422, 2.8880062103271484, 1.0027174949645996] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:51 y_server.py:595 Action chunk #694 generated | Total time: 167.85ms
+INFO 2026-06-10 09:42:51 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:51 y_server.py:564 Running inference for observation #705 (must_go: False)
+INFO 2026-06-10 09:42:51 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:51 y_server.py:873 Preprocessing and inference took 0.1614s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:51 y_server.py:922 Observation 705 | Total time: 164.37ms
+INFO 2026-06-10 09:42:51 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-6.336719512939453, -0.47645068168640137, -2.535745620727539, 3.3122024536132812, 3.9218921661376953, 1.0105996131896973] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:51 y_server.py:595 Action chunk #705 generated | Total time: 165.31ms
+INFO 2026-06-10 09:42:51 y_server.py:564 Running inference for observation #707 (must_go: False)
+INFO 2026-06-10 09:42:51 y_server.py:873 Preprocessing and inference took 0.1607s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:51 y_server.py:922 Observation 707 | Total time: 166.97ms
+INFO 2026-06-10 09:42:51 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-5.827369689941406, 0.32604289054870605, -3.3507251739501953, 3.976512908935547, 3.841768264770508, 0.9599084854125977] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:51 y_server.py:595 Action chunk #707 generated | Total time: 167.90ms
+INFO 2026-06-10 09:42:52 ort/utils.py:77 <Logger policy_server (NOTSET)> Starting receiver
+INFO 2026-06-10 09:42:52 y_server.py:564 Running inference for observation #718 (must_go: False)
+INFO 2026-06-10 09:42:52 y_server.py:873 Preprocessing and inference took 0.1605s, action shape: torch.Size([1, 33, 6])
+INFO 2026-06-10 09:42:52 y_server.py:922 Observation 718 | Total time: 167.41ms
+INFO 2026-06-10 09:42:52 y_server.py:590 [SERVER->CLIENT] Sending 30 actions | First action: [-8.064476013183594, -3.0716910362243652, -0.31054115295410156, 1.8521156311035156, 4.932104110717773, 1.015988826751709] | Payload size: 31267 bytes
+INFO 2026-06-10 09:42:52 y_server.py:595 Action chunk #718 generated | Total time: 168.36ms
+^CINFO 2026-06-10 09:44:18 y_server.py:968 KeyboardInterrupt received, stopping server...
+INFO 2026-06-10 09:44:18 y_server.py:943 Server stopping...
+INFO 2026-06-10 09:44:18 y_server.py:972 Server terminated
+terminate called without an active exception
+trietlm@di-server:~/lerobot$

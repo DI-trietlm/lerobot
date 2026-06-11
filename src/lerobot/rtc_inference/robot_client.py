@@ -235,11 +235,23 @@ class RobotClient:
                     except Exception as e:
                         self.logger.debug(f"Recording: failed to save image for {key}: {e}")
 
+                # Joint state (every "<motor>.pos" key) so deploy (state, image) pairs can be
+                # replayed offline exactly as the policy saw them.
+                state = {}
+                for key, value in raw_obs.items():
+                    if not key.endswith(".pos"):
+                        continue
+                    try:
+                        state[key] = float(value.item()) if hasattr(value, "item") else float(value)
+                    except (TypeError, ValueError):
+                        self.logger.debug(f"Recording: could not serialize state '{key}'")
+
                 meta = {
                     "timestep": timestep,
                     "elapsed_s": round(elapsed_s, 6),
                     "abs_timestamp": round(abs_timestamp, 6),
                     "cameras": camera_keys,
+                    "state": state,
                 }
                 meta_f.write(json.dumps(meta) + "\n")
                 meta_f.flush()

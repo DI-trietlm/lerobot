@@ -15,7 +15,7 @@ Each step narrows the cause; run them in order and stop when one localizes the f
 | 1 | `REPORT-pouring-startpose-and-phases.ipynb` | What does the data say? Start-pose IQR (safe reset region) + grasp/pour phase detection. | done |
 | 2 | `openloop_replay_smolvla.ipynb` | Does the **model** reproduce training actions from training frames? (isolates model+norm+preprocessing) | done |
 | 3 | `deploy_image_probe_smolvla.ipynb` | Do the **deploy camera images** make the output collapse? Ablations: RGB/BGR, server 256-resize, image diff vs dataset. | done |
-| 4 | _deploy (image+state) pairs_ | Image **or** state? Log the real deploy `observation.state`, pair it with the deploy image, swap each input. | todo |
+| 4 | `deploy_state_replay_smolvla.ipynb` | Image **or** state? Replay real deploy `(state, image)` pairs + swap each input; plus a closed-loop fixed-point probe. | ready (needs a deploy run with state) |
 | 5 | _state-calibration + camera-rig audit_ | Calibration drift vs dataset; camera assignment / FOV / mount parity. | todo |
 
 ## Findings so far
@@ -26,11 +26,14 @@ Each step narrows the cause; run them in order and stop when one localizes the f
 - **Step 2** — predicted actions **track ground-truth almost perfectly** across a whole episode
   (approach → pour). Normalization stats in the checkpoint are correct. ⇒ **model + pipeline are
   fine**; the fault is in the **deploy observation pipeline**.
-- **Step 3+** — in progress: is the live observation (camera images / state) off-distribution at
-  run time?
+- **Step 3** — deploy images behave **identically** to dataset images (output std 1.6 vs 1.6);
+  RGB/BGR and the 256-resize are cleared. The output is **dominated by `observation.state`** (with
+  state fixed, approach→pour images barely change it). ⇒ image is **not** the cause; the suspect is
+  the **state** (and state↔image coherence) at run time → Step 4.
 
 ## Notes
 
-- `record_obs` currently saves images + `metadata.jsonl` but **not** `observation.state`; Step 4
-  needs a small change to log the state so deploy (image, state) pairs can be replayed exactly.
-- Step 3 expects the deploy `recorded_obs/` folder copied next to the notebook on the GPU server.
+- `record_obs` now logs `observation.state` per frame in `metadata.jsonl`
+  ([robot_client.py](../src/lerobot/rtc_inference/robot_client.py)), so Step 4 can replay the exact
+  deploy `(state, image)` pairs. Capture a fresh short deploy run before running Step 4.
+- Steps 3–4 expect the deploy `recorded_obs/` folder copied next to the notebook on the GPU server.

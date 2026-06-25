@@ -125,6 +125,7 @@ class DatasetInfo:
     # File path templates
     data_path: str = field(default=DEFAULT_DATA_PATH)
     video_path: str | None = field(default=DEFAULT_VIDEO_PATH)
+    video_encoding_deferred: bool = False
 
     # Optional metadata
     robot_type: str | None = None
@@ -162,6 +163,8 @@ class DatasetInfo:
                 ft["shape"] = list(ft["shape"])
         if d.get("tools") is None:
             d.pop("tools", None)
+        if not d.get("video_encoding_deferred", False):
+            d.pop("video_encoding_deferred", None)
         return d
 
     @classmethod

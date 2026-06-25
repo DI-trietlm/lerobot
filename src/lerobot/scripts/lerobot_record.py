@@ -406,6 +406,7 @@ def record(
                 encoder_threads=cfg.dataset.encoder_threads,
                 streaming_encoding=cfg.dataset.streaming_encoding,
                 encoder_queue_maxsize=cfg.dataset.encoder_queue_maxsize,
+                defer_video_encoding=cfg.dataset.defer_video_encoding,
                 image_writer_processes=cfg.dataset.num_image_writer_processes if num_cameras > 0 else 0,
                 image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera * num_cameras
                 if num_cameras > 0
@@ -435,6 +436,7 @@ def record(
                 encoder_threads=cfg.dataset.encoder_threads,
                 streaming_encoding=cfg.dataset.streaming_encoding,
                 encoder_queue_maxsize=cfg.dataset.encoder_queue_maxsize,
+                defer_video_encoding=cfg.dataset.defer_video_encoding,
             )
 
         robot.connect()

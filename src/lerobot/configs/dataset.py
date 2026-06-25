@@ -63,6 +63,10 @@ class DatasetRecordConfig:
     # Enable streaming video encoding: encode frames in real-time during capture instead
     # of writing PNG images first. Makes save_episode() near-instant. More info in the documentation: https://huggingface.co/docs/lerobot/streaming_video_encoding
     streaming_encoding: bool = False
+    # Defer video encoding at the end of recording. This keeps PNG frames under images/
+    # so downstream tools can transform/cut them before creating the final video dataset.
+    # Only valid with video=True and streaming_encoding=False.
+    defer_video_encoding: bool = False
     # Maximum number of frames to buffer per camera when using streaming encoding.
     # ~1s buffer at 30fps. Provides backpressure if the encoder can't keep up.
     encoder_queue_maxsize: int = 30

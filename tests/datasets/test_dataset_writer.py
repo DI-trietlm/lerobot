@@ -36,6 +36,15 @@ SIMPLE_FEATURES = {
     "action": {"dtype": "float32", "shape": (6,), "names": None},
 }
 
+VIDEO_FEATURES = {
+    "observation.images.cam": {
+        "dtype": "video",
+        "shape": (16, 16, 3),
+        "names": ["height", "width", "channels"],
+    },
+    "action": {"dtype": "float32", "shape": (2,), "names": None},
+}
+
 
 def _make_frame(features: dict, task: str = "Dummy task") -> dict:
     """Build a valid frame dict for the given features."""
@@ -215,6 +224,94 @@ def test_finalize_is_idempotent(tmp_path):
 
     dataset.finalize()
     dataset.finalize()  # second call should not raise
+
+
+def test_finalize_deferred_video_keeps_pngs_and_skips_encoding(tmp_path):
+    """Deferred video encoding leaves PNGs for downstream transforms."""
+    root = tmp_path / "deferred"
+    dataset = LeRobotDataset.create(
+        repo_id=DUMMY_REPO_ID,
+        fps=DEFAULT_FPS,
+        features=VIDEO_FEATURES,
+        root=root,
+        streaming_encoding=False,
+        defer_video_encoding=True,
+    )
+    for _ in range(3):
+        dataset.add_frame(_make_frame(VIDEO_FEATURES))
+    dataset.save_episode()
+
+    img_dir = dataset.writer._get_image_file_dir(0, "observation.images.cam")
+    assert img_dir.exists()
+
+    with patch.object(dataset.writer, "_batch_save_episode_video") as mock_batch_encode:
+        dataset.finalize()
+        dataset.finalize()
+
+    mock_batch_encode.assert_not_called()
+    assert img_dir.exists()
+    assert list(img_dir.glob("*.png"))
+    assert not (root / "videos").exists()
+    assert (root / "data").exists()
+    assert (root / "meta" / "tasks.parquet").exists()
+    assert dataset.meta.info.video_encoding_deferred is True
+
+
+def test_finalize_default_flushes_pending_video_encoding(tmp_path):
+    """Default finalize still flushes pending batched videos."""
+    dataset = LeRobotDataset.create(
+        repo_id=DUMMY_REPO_ID,
+        fps=DEFAULT_FPS,
+        features=VIDEO_FEATURES,
+        root=tmp_path / "default_flush",
+        batch_encoding_size=10,
+        streaming_encoding=False,
+    )
+    for _ in range(3):
+        dataset.add_frame(_make_frame(VIDEO_FEATURES))
+    dataset.save_episode()
+
+    with patch.object(dataset.writer, "_batch_save_episode_video") as mock_batch_encode:
+        dataset.finalize()
+
+    mock_batch_encode.assert_called_once_with(0, 1)
+    assert dataset.meta.info.video_encoding_deferred is False
+
+
+def test_resume_deferred_video_encoding_keeps_new_pngs(tmp_path):
+    root = tmp_path / "resume_deferred"
+    dataset = LeRobotDataset.create(
+        repo_id=DUMMY_REPO_ID,
+        fps=DEFAULT_FPS,
+        features=VIDEO_FEATURES,
+        root=root,
+        batch_encoding_size=10,
+        defer_video_encoding=True,
+    )
+    for _ in range(2):
+        dataset.add_frame(_make_frame(VIDEO_FEATURES))
+    dataset.save_episode()
+    dataset.finalize()
+
+    resumed = LeRobotDataset.resume(
+        repo_id=DUMMY_REPO_ID,
+        root=root,
+        batch_encoding_size=10,
+        defer_video_encoding=True,
+    )
+    for _ in range(2):
+        resumed.add_frame(_make_frame(VIDEO_FEATURES))
+    resumed.save_episode()
+
+    ep1_img_dir = resumed.writer._get_image_file_dir(1, "observation.images.cam")
+    with patch.object(resumed.writer, "_batch_save_episode_video") as mock_batch_encode:
+        resumed.finalize()
+
+    mock_batch_encode.assert_not_called()
+    assert resumed.meta.total_episodes == 2
+    assert ep1_img_dir.exists()
+    assert list(ep1_img_dir.glob("*.png"))
+    assert not (root / "videos").exists()
 
 
 def test_finalize_then_read_roundtrip(tmp_path):

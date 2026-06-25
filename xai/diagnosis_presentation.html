@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chẩn đoán: SmolVLA pouring đứng yên</title>
+<style>
+  :root{
+    --bg:#0f1420; --card:#1a2232; --ink:#e8edf6; --mut:#9aa7bd; --line:#2c3a52;
+    --accent:#5b8cff; --good:#34d399; --bad:#f87171; --warn:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0c111c,#0f1420);color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;line-height:1.55}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 80px}
+  header{text-align:center;padding:24px 0 6px}
+  h1{font-size:29px;margin:0 0 6px}
+  .sub{color:var(--mut);font-size:15px}
+  h2{font-size:21px;margin:40px 0 6px}
+  .h2tag{font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase}
+  .rule{height:1px;background:var(--line);margin:8px 0 16px}
+  h3{font-size:16px;margin:0 0 8px}
+  p{color:#d4dcec}.mut{color:var(--mut)}
+  .grid{display:grid;gap:16px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:760px){.g2,.g3{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .pill{display:inline-block;font-size:12px;padding:3px 10px;border-radius:999px;font-weight:700}
+  .p-good{background:rgba(52,211,153,.15);color:var(--good)}
+  .p-bad{background:rgba(248,113,113,.15);color:var(--bad)}
+  .p-warn{background:rgba(251,191,36,.15);color:var(--warn)}
+  .p-acc{background:rgba(91,140,255,.15);color:var(--accent)}
+  .tldr{background:linear-gradient(135deg,#172138,#1d2a46);border:1px solid #34507e;
+    border-radius:16px;padding:20px 22px;margin-top:18px}
+  .tldr b{color:#fff}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .ok{color:var(--good)}.no{color:var(--bad)}.wn{color:var(--warn)}
+  .strike{color:var(--mut);text-decoration:line-through}
+  .big{font-size:30px;font-weight:800;line-height:1}.lbl{font-size:12.5px;color:var(--mut);margin-top:4px}
+  .bar-row{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:13px}
+  .bar-name{width:160px;color:var(--mut);flex:none}
+  .bar-track{flex:1;background:#0e1626;border-radius:6px;height:18px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:6px}
+  .bar-val{width:60px;text-align:right;font-variant-numeric:tabular-nums;flex:none}
+  .flowbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#131b2b}
+  .mini{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px dashed #25324a}
+  .mini:last-child{border-bottom:none}
+  .arrow{color:var(--accent);font-size:20px;text-align:center;margin:4px 0}
+  .key{border-left:4px solid var(--bad);background:rgba(248,113,113,.07)}
+  .sol{border-left:4px solid var(--good);background:rgba(52,211,153,.06)}
+  .step{display:flex;gap:12px;align-items:flex-start;margin:11px 0}
+  .step .n{flex:none;width:25px;height:25px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px}
+  code{background:#0e1626;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12.5px;color:#bcd0ff}
+  .foot{color:var(--mut);font-size:13px;margin-top:32px;border-top:1px solid var(--line);padding-top:14px}
+  .legend{display:flex;gap:18px;font-size:12.5px;color:var(--mut);margin-top:6px;justify-content:center}
+  .dot{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Vì sao robot “đứng yên” — Chẩn đoán SmolVLA pouring</h1>
+  <div class="sub">Lỗi: <code>smolvla-pouring-0.1</code> / <code>so-arm-101-pouring-0.2</code> &nbsp;·&nbsp; Đối chứng (chạy OK): <code>so-arm-101-general-0.2</code> (pick → hộp)</div>
+</header>
+
+<div class="tldr">
+  <span class="pill p-bad">NGUYÊN NHÂN CHÍNH</span>
+  <p style="margin:10px 0 4px;font-size:15.5px">
+    Đổ xong, cốc cam được <b>trả về ĐÚNG CHỖ CŨ</b> → lúc cuối episode <b>cả tư thế LẪN khung cảnh đều TRÙNG</b> lúc đầu,
+    nhưng nhãn ngược nhau (<b class="ok">reach</b> ở đầu vs <b class="no">nghỉ</b> ở cuối). Vì cảnh gần như <b>tĩnh suốt</b> nên
+    model <b>học cách bỏ qua vision</b> → mất luôn tín hiệu duy nhất để gỡ mơ hồ → gom về <b>“đứng yên”</b>.
+  </p>
+  <p style="margin:8px 0 4px;font-size:14px" class="mut">
+    Đối chứng <b>pick</b> (“Put orange cup into white box”): cũng về cùng tư thế, nhưng <b class="ok">cốc nằm trong hộp</b> →
+    <b>cảnh cuối KHÁC cảnh đầu</b> → không trùng → <b>overfit chạy tốt</b>. Mọi thống kê joint/action của 2 data gần như y hệt — khác biệt duy nhất là <b>kênh hình</b>.
+  </p>
+  <span class="pill p-good">GIẢI PHÁP</span>
+  <p style="margin:10px 0 0;font-size:15.5px">
+    <b>Đổ xong đặt cốc ở VỊ TRÍ KHÁC</b> (đúng như pick làm) → cảnh cuối ≠ đầu, đồng thời buộc vision có ích.
+    Phụ trợ: <b>cắt ~2s “giữ yên” cuối episode</b>. Bỏ qua <code>n_obs_steps</code>.
+  </p>
+</div>
+
+<!-- ===================== PHẦN 1 ===================== -->
+<h2><span class="h2tag">Phần 1</span><br>Vì sao các nguyên nhân khác KHÔNG phải là thật</h2>
+<div class="rule"></div>
+
+<div class="card" style="margin-bottom:16px">
+  <h3>1a · Loại trừ nhanh (đều có bằng chứng số)</h3>
+  <div class="grid g2">
+    <ul style="list-style:none;padding:0;margin:0">
+      <li>❌ <span class="strike">OOD start-pose</span> — reset đúng manifold, vẫn đứng yên</li>
+      <li>❌ <span class="strike">Normalization hỏng</span> — mean/std trong checkpoint đúng</li>
+      <li>❌ <span class="strike">Camera / khung hình</span> — đổi cả ảnh chỉ đổi output vài độ</li>
+    </ul>
+    <ul style="list-style:none;padding:0;margin:0">
+      <li>❌ <span class="strike">RGB↔BGR</span> · <span class="strike">Resize 256</span> — không đổi kết quả</li>
+      <li>❌ <span class="strike">JPEG q90 transport</span> — MAE 2.22 → 2.36 (như nhau)</li>
+      <li>❌ <span class="strike">Flow-matching chưa hội tụ / “96 ep quá ít”</span> — xem 1b &amp; 1c</li>
+    </ul>
+  </div>
+</div>
+
+<div class="grid g2">
+  <div class="card">
+    <h3>1b · Model ĐÃ hội tụ <span class="pill p-good">đã chứng minh</span></h3>
+    <p class="mut" style="font-size:13px;margin:2px 0 8px">Cho model ăn frame thật từ data → nó <b>tái tạo đúng action GT</b>, kể cả cú <b>pour</b> (wrist_roll ~100°). Nếu chưa hội tụ thì không thể khớp tới 2°.</p>
+    <svg viewBox="0 0 400 180" width="100%" height="160" role="img" aria-label="pred vs ground-truth">
+      <rect x="0" y="0" width="400" height="180" fill="#0e1626" rx="8"/>
+      <line x1="30" y1="16" x2="30" y2="160" stroke="#2c3a52"/><line x1="30" y1="160" x2="390" y2="160" stroke="#2c3a52"/>
+      <text x="4" y="28" fill="#9aa7bd" font-size="9">110°</text><text x="10" y="162" fill="#9aa7bd" font-size="9">-10</text>
+      <polyline fill="none" stroke="#34d399" stroke-width="2.5" points="30,156 90,149 150,155 246,30 310,128 382,131"/>
+      <circle cx="246" cy="30" r="3.5" fill="#34d399"/>
+      <polyline fill="none" stroke="#f87171" stroke-width="2.5" stroke-dasharray="5 4" points="30,153 90,146 150,155 246,36 310,129 382,132"/>
+      <text x="170" y="26" fill="#34d399" font-size="9.5">cú POUR — pred bám sát GT</text>
+    </svg>
+    <div class="legend"><span><span class="dot" style="background:#34d399"></span>GT</span><span><span class="dot" style="background:#f87171"></span>pred</span><span>MAE ≈ <b style="color:#e8edf6">2.2°</b> (raw=jpeg=no-img)</span></div>
+  </div>
+
+  <div class="card">
+    <h3>1c · Output bám STATE, gần như bỏ qua ẢNH</h3>
+    <p class="mut" style="font-size:13px;margin:2px 0 10px">Giữ nguyên, chỉ đổi 1 đầu vào → đo độ dịch action (tổng 6 khớp).</p>
+    <div class="bar-row"><div class="bar-name">Đổi STATE</div><div class="bar-track"><div class="bar-fill" style="width:100%;background:#5b8cff"></div></div><div class="bar-val">~100°</div></div>
+    <div class="bar-row"><div class="bar-name">Đổi ẢNH (deploy)</div><div class="bar-track"><div class="bar-fill" style="width:3%;background:#f87171"></div></div><div class="bar-val">~3°</div></div>
+    <div class="bar-row"><div class="bar-name">Đổi ẢNH @home</div><div class="bar-track"><div class="bar-fill" style="width:9%;background:#fbbf24"></div></div><div class="bar-val">7–11°</div></div>
+    <p class="mut" style="font-size:12.5px;margin-top:10px">→ Model <b>state-dominated</b>; vision rất yếu. Điều này <b>không phải lỗi</b> — nó là <i>hệ quả</i> của data (xem Phần 2).</p>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h3>1d · ĐỐI CHỨNG quyết định — so với data cũ đã overfit OK (pick → hộp)</h3>
+  <p class="mut" style="font-size:13px;margin:2px 0 10px">Nếu nguyên nhân nằm ở “data mâu thuẫn / quá ít ep / idle / khởi động yếu” thì pick phải <b>tốt hơn</b> pouring. Thực tế <b>ngược lại</b>:</p>
+  <table>
+    <tr><th>Chỉ số (joint/action)</th><th class="num">POURING (lỗi)</th><th class="num">PICK/general (OK)</th><th>Phán định</th></tr>
+    <tr><td>Action mâu thuẫn / state</td><td class="num">3.2°</td><td class="num">3.2°</td><td class="mut">bằng nhau</td></tr>
+    <tr><td>Gripper mâu thuẫn</td><td class="num">1.0</td><td class="num">1.7</td><td class="no">general CAO hơn</td></tr>
+    <tr><td>Xung đột reach-vs-stay</td><td class="num">0.051</td><td class="num">0.065</td><td class="no">general CAO hơn</td></tr>
+    <tr><td>start ≈ end pose?</td><td class="num">có (2.7°)</td><td class="num">có (1.5°)</td><td class="mut">cả hai</td></tr>
+    <tr><td>% frame nghỉ (tổng)</td><td class="num">11%</td><td class="num">16%</td><td class="no">general nhiều hơn</td></tr>
+    <tr><td>Tốc độ khởi động (frame 0–5)</td><td class="num">7.4</td><td class="num">3.9</td><td class="no">general CHẬM hơn</td></tr>
+    <tr><td>Số episode</td><td class="num">96</td><td class="num">140</td><td class="mut">— (xem dưới)</td></tr>
+  </table>
+  <p style="margin:12px 0 0"><span class="pill p-bad">KẾT LUẬN PHẦN 1</span>&nbsp;
+    Mọi thống kê proprioception/action <b>gần như y hệt</b> (pick còn “tệ hơn” mà vẫn chạy). Vậy nguyên nhân <b>KHÔNG nằm trong dữ liệu khớp/hành động</b>, <b>không phải model</b>, <b>không phải sensor</b>, và <b>“96 ep quá ít” bị bác</b> (pick 140 nhưng tệ hơn ở mọi mặt khác). → Khác biệt phải ở <b>kênh HÌNH ẢNH</b>.</p>
+</div>
+
+<!-- ===================== PHẦN 2 ===================== -->
+<h2><span class="h2tag">Phần 2</span><br>Nguyên nhân chính &amp; giải pháp</h2>
+<div class="rule"></div>
+
+<div class="card key">
+  <h3>Khác biệt DUY NHẤT: cảnh tại tư thế cuối — do cốc trả về đâu</h3>
+  <div class="grid g2" style="margin-top:8px">
+    <div class="flowbox">
+      <span class="pill p-good">PICK / general — OK</span>
+      <div class="mini"><span>Đầu ep</span><span>tư thế <b>home</b> · cốc ở <b>A</b></span></div>
+      <div class="mini"><span>Cuối ep</span><span>tư thế <b>home</b> · cốc <b class="ok">TRONG HỘP</b></span></div>
+      <div class="arrow">⟹</div>
+      <p style="margin:0;font-size:13.5px"><b class="ok">Cảnh cuối ≠ đầu</b> → (pose,scene) <b>không trùng</b> → không xung đột → chạy.</p>
+    </div>
+    <div class="flowbox">
+      <span class="pill p-bad">POURING — lỗi</span>
+      <div class="mini"><span>Đầu ep</span><span>tư thế <b>home</b> · cốc ở <b>A</b></span></div>
+      <div class="mini"><span>Cuối ep</span><span>tư thế <b>home</b> · cốc <b class="no">TRẢ LẠI A</b></span></div>
+      <div class="arrow">⟹</div>
+      <p style="margin:0;font-size:13.5px"><b class="no">Cảnh cuối ≈ đầu</b> → (pose,scene) <b>TRÙNG</b> nhưng 2 nhãn ngược → xung đột.</p>
+    </div>
+  </div>
+  <div class="arrow" style="font-size:15px;margin-top:14px">+ Cảnh pouring gần như <b>tĩnh suốt</b> (cốc luôn ở A) ⟹ vision <b>vô dụng khi train</b> ⟹ model thành <b>image-blind</b> (đã đo ở 1c)</div>
+  <p style="text-align:center;margin:4px 0 0"><b>⟹ Tại home: state giống nhau VÀ ảnh cũng giống nhau giữa “reach” và “nghỉ” → không có tín hiệu nào gỡ mơ hồ → chọn đa số = NGHỈ → <span class="no">đứng yên</span>.</b></p>
+</div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card">
+    <h3>Yếu tố khuếch đại: pouring “giữ yên” cuối ep ~2× nhiều hơn</h3>
+    <p class="mut" style="font-size:13px;margin:2px 0 10px">Thời gian đứng yên ở đuôi episode (đo trực tiếp). Idle này lại rơi đúng (pose+scene) lúc đầu → càng đè “stay” lên “reach”.</p>
+    <div class="bar-row"><div class="bar-name">Pouring · idle cuối (mean)</div><div class="bar-track"><div class="bar-fill" style="width:48%;background:#f87171"></div></div><div class="bar-val">1.9s</div></div>
+    <div class="bar-row"><div class="bar-name">Pick · idle cuối (mean)</div><div class="bar-track"><div class="bar-fill" style="width:28%;background:#34d399"></div></div><div class="bar-val">1.1s</div></div>
+    <div class="bar-row"><div class="bar-name">Pouring · % ep idle &gt;2s</div><div class="bar-track"><div class="bar-fill" style="width:40%;background:#f87171"></div></div><div class="bar-val">40%</div></div>
+    <div class="bar-row"><div class="bar-name">Pick · % ep idle &gt;2s</div><div class="bar-track"><div class="bar-fill" style="width:22%;background:#34d399"></div></div><div class="bar-val">22%</div></div>
+  </div>
+  <div class="card">
+    <h3>Vì sao open-loop “trông” hoàn hảo mà deploy hỏng</h3>
+    <p style="margin:0;font-size:13.5px">Replay <b>nạp sẵn state demo đang chuyển động</b> ở mỗi frame → model chỉ “tiếp tục” là khớp GT. Nhưng deploy/closed-loop, state <b>chỉ tiến nếu policy lệnh chuyển động</b> — mà ở home nó lệnh “nghỉ” → state đứng yên → lại “nghỉ” → <b>kẹt ở điểm cố định</b>.</p>
+    <p class="mut" style="font-size:12.5px;margin:10px 0 0">Dấu vết: deploy replay cho <code>Δ = action − state ≈ 0</code> (mean |Δ| ≈ 0.7°) — policy lệnh “ở yên” đúng nghĩa.</p>
+  </div>
+</div>
+
+<div class="card sol" style="margin-top:16px">
+  <h3 style="margin-bottom:4px">GIẢI PHÁP — Giai đoạn 1 (overfit ~120 quỹ đạo): sửa ở DATA</h3>
+  <div class="step"><div class="n">1</div><div><b>Đổ xong đặt cốc cam ở VỊ TRÍ KHÁC</b> (đúng như pick đưa cốc vào hộp). Cảnh cuối ≠ đầu → phá (pose+scene) trùng, <b>đồng thời buộc vision có ích</b>. <span class="pill p-good">được pick xác nhận</span></div></div>
+  <div class="step"><div class="n">2</div><div><b>Cắt / giảm ~2s “đưa tay về home + giữ yên” cuối episode</b> (hoặc dừng record sớm). Giảm số nhãn <i>stay</i> đè lên <i>reach</i>.</div></div>
+  <div class="step"><div class="n">3</div><div><b>Bỏ qua <code>n_obs_steps</code>.</b> SmolVLA chỉ dùng quan sát mới nhất (<code>[:, -1]</code> trong <code>prepare_images/state</code>) → tăng nó vô ích.</div></div>
+  <h3 style="margin:16px 0 4px">Giai đoạn 2 — Generalization (+200–300 quỹ đạo, sau khi overfit OK)</h3>
+  <p style="margin:0">Tăng biến thiên vị trí cốc/hộp/camera; cân nhắc state-dropout / delta-action để vision đóng vai trò mạnh hơn.</p>
+</div>
+
+<div class="foot">
+  Nguồn số liệu: notebook trong <code>xai/</code> —
+  ① <code>openloop_replay_smolvla</code> (model OK, image-blind) ·
+  ② <code>deploy_state_replay_smolvla</code> (Δ≈0) ·
+  ③ phân tích đối chứng <code>pouring-0.2</code> vs <code>general-0.2</code> (bảng 1d &amp; idle cuối).
+  &nbsp;Tất cả con số trên trích từ các phân tích này.
+</div>
+
+</div>
+</body>
+</html>

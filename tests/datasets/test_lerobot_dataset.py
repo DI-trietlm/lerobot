@@ -428,6 +428,38 @@ def test_create_propagates_video_files_size_in_mb(tmp_path):
     assert dataset.meta.video_files_size_in_mb == 42.0
 
 
+def test_create_rejects_deferred_streaming_encoding(tmp_path):
+    features = {
+        "observation.images.cam": {
+            "dtype": "video",
+            "shape": (16, 16, 3),
+            "names": ["height", "width", "channels"],
+        },
+        "action": {"dtype": "float32", "shape": (2,), "names": None},
+    }
+    with pytest.raises(ValueError, match="defer_video_encoding=True is incompatible"):
+        LeRobotDataset.create(
+            repo_id=DUMMY_REPO_ID,
+            fps=DEFAULT_FPS,
+            features=features,
+            root=tmp_path / "ds",
+            streaming_encoding=True,
+            defer_video_encoding=True,
+        )
+
+
+def test_create_rejects_deferred_without_videos(tmp_path):
+    with pytest.raises(ValueError, match="requires use_videos=True"):
+        LeRobotDataset.create(
+            repo_id=DUMMY_REPO_ID,
+            fps=DEFAULT_FPS,
+            features=SIMPLE_FEATURES,
+            root=tmp_path / "ds",
+            use_videos=False,
+            defer_video_encoding=True,
+        )
+
+
 def test_add_frame_works_in_write_mode(tmp_path):
     """add_frame() succeeds on a dataset created via create()."""
     dataset = LeRobotDataset.create(

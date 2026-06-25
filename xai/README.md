@@ -3,37 +3,55 @@
 Why `di-techinnova/smolvla-pouring-0.1` (trained on `di-techinnova/so-arm-101-pouring-0.2`,
 96 episodes) **stands still** when deployed via the RTC stack, even though it overfit the data.
 
+**A self-contained presentation of the whole diagnosis** is in
+[`diagnosis_presentation.html`](diagnosis_presentation.html) (open in a browser, offline).
+
 Notebooks run on the **GPU server** (need the checkpoint + dataset cache). Older XVLA/SmolVLA
 attention & occlusion explainability scripts have moved to [`attention/`](attention/).
 
-## The 5-step check flow
+## TL;DR — root cause (confirmed)
 
-Each step narrows the cause; run them in order and stop when one localizes the fault.
+Pouring **returns the orange cup to its original spot**, so at episode end **both the pose AND the
+scene match the start**, but with opposite labels (start → *reach*, end → *rest*). Because the scene
+is nearly static, the policy **learned to ignore vision** → at the home pose there is **no signal
+(state same, image same)** to tell start from end → it collapses to the majority behaviour (*stay*)
+→ **standstill**.
 
-| # | Notebook | Question it answers | Status |
+**Control:** `so-arm-101-general-0.2` (pick → box) returns to the same pose but the **cup ends in a
+box** → end scene ≠ start scene → no collision → it overfits fine. Every joint/action statistic of
+the two datasets is **nearly identical** (general is even "worse"); the only difference is the
+**image stream**.
+
+**Fix:** after pouring, **place the cup somewhere else** (like the pick task) + trim the ~2 s of
+"return home & hold" at episode end. Skip `n_obs_steps` (SmolVLA uses only the latest obs).
+
+## The check flow (done)
+
+| # | Notebook | Question it answers | Result |
 |---|----------|---------------------|--------|
-| 1 | `REPORT-pouring-startpose-and-phases.ipynb` | What does the data say? Start-pose IQR (safe reset region) + grasp/pour phase detection. | done |
-| 2 | `openloop_replay_smolvla.ipynb` | Does the **model** reproduce training actions from training frames? (isolates model+norm+preprocessing) | done |
-| 3 | `deploy_image_probe_smolvla.ipynb` | Do the **deploy camera images** make the output collapse? Ablations: RGB/BGR, server 256-resize, image diff vs dataset. | done |
-| 4 | `deploy_state_replay_smolvla.ipynb` | Image **or** state? Replay real deploy `(state, image)` pairs + swap each input; plus a closed-loop fixed-point probe. | ready (needs a deploy run with state) |
-| 5 | _state-calibration + camera-rig audit_ | Calibration drift vs dataset; camera assignment / FOV / mount parity. | todo |
+| 1 | `REPORT-pouring-startpose-and-phases.ipynb` | Start-pose IQR + grasp/pour phases | start-pose OOD fixed; not the cause |
+| 2 | `openloop_replay_smolvla.ipynb` | Does the **model** reproduce training actions? | yes (MAE ~2°); model+norm fine; image-blind |
+| 3 | `deploy_image_probe_smolvla.ipynb` | Do **deploy images** make it collapse? | no — RGB/BGR, 256-resize, JPEG all cleared |
+| 4 | `deploy_state_replay_smolvla.ipynb` | Image or state? | state-dominated; `Δ≈0` reproduces standstill |
+| 5 | _dataset control_ `pouring-0.2` vs `general-0.2` | Why does pick overfit but pouring not? | joint-stats identical → cause is the **scene** (cup returned to same spot) |
 
-## Findings so far
+## Findings (why the other suspects are NOT the cause)
 
-- **Step 1** — the old "to zero pose" reset (shoulder_pan +20°, gripper 0) is **OOD** vs the start
-  manifold (shoulder_pan always negative, gripper ~1–2.4). Fixed in the GUI (reset to start-pose).
-  But resetting in-distribution **did not** fix the standstill ⇒ start-pose is not the (only) cause.
-- **Step 2** — predicted actions **track ground-truth almost perfectly** across a whole episode
-  (approach → pour). Normalization stats in the checkpoint are correct. ⇒ **model + pipeline are
-  fine**; the fault is in the **deploy observation pipeline**.
-- **Step 3** — deploy images behave **identically** to dataset images (output std 1.6 vs 1.6);
-  RGB/BGR and the 256-resize are cleared. The output is **dominated by `observation.state`** (with
-  state fixed, approach→pour images barely change it). ⇒ image is **not** the cause; the suspect is
-  the **state** (and state↔image coherence) at run time → Step 4.
+- **Start-pose / normalization / camera / RGB-BGR / 256-resize / JPEG** — all eliminated with
+  numbers (resetting in-distribution, checkpoint stats correct, image swaps move output only a few
+  degrees).
+- **Model converged** — open-loop replay reproduces GT incl. the pour (MAE ~2°); so it is **not**
+  under-trained and **not** "96 episodes too few".
+- **Joint-space data conflict** — *refuted by the control*: `general-0.2` (overfit OK) has **equal
+  or higher** per-state action conflict, more idle, slower initiation, yet works. So the fault is
+  **not** in the proprioception/action data.
+- **Real cause = (pose + scene) collision** from returning the cup to its original position, which
+  makes vision useless → image-blind policy → cannot disambiguate start vs end at the home pose.
 
 ## Notes
 
 - `record_obs` now logs `observation.state` per frame in `metadata.jsonl`
-  ([robot_client.py](../src/lerobot/rtc_inference/robot_client.py)), so Step 4 can replay the exact
-  deploy `(state, image)` pairs. Capture a fresh short deploy run before running Step 4.
+  ([robot_client.py](../src/lerobot/rtc_inference/robot_client.py)) for Step 4's exact replay.
 - Steps 3–4 expect the deploy `recorded_obs/` folder copied next to the notebook on the GPU server.
+- The original "state-calibration + camera-rig audit" step was **dropped**: the control shows the
+  fault is the task's scene structure, not a sensor/calibration mismatch.

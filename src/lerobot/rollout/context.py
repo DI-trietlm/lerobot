@@ -336,6 +336,7 @@ def build_rollout_context(
                 streaming_encoding=cfg.dataset.streaming_encoding,
                 encoder_queue_maxsize=cfg.dataset.encoder_queue_maxsize,
                 encoder_threads=cfg.dataset.encoder_threads,
+                defer_video_encoding=cfg.dataset.defer_video_encoding,
                 image_writer_processes=cfg.dataset.num_image_writer_processes,
                 image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera
                 * len(robot.cameras if hasattr(robot, "cameras") else []),
@@ -372,6 +373,7 @@ def build_rollout_context(
                 encoder_queue_maxsize=cfg.dataset.encoder_queue_maxsize,
                 encoder_threads=cfg.dataset.encoder_threads,
                 video_files_size_in_mb=target_video_mb,
+                defer_video_encoding=cfg.dataset.defer_video_encoding,
             )
 
     if dataset is not None:

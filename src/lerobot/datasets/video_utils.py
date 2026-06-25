@@ -1182,9 +1182,17 @@ class VideoEncodingManager:
         img_dir = self.dataset.root / "images"
         if img_dir.exists():
             png_files = list(img_dir.rglob("*.png"))
+            defer_video_encoding = bool(
+                writer is not None and getattr(writer, "_defer_video_encoding", False)
+            )
             if len(png_files) == 0:
                 shutil.rmtree(img_dir)
                 logger.debug("Cleaned up empty images directory")
+            elif defer_video_encoding:
+                logger.debug(
+                    "Keeping images directory with %s PNG files because video encoding is deferred",
+                    len(png_files),
+                )
             else:
                 logger.debug(f"Images directory is not empty, containing {len(png_files)} PNG files")
 

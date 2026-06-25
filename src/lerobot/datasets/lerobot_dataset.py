@@ -63,6 +63,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
         encoder_threads: int | None = None,
         streaming_encoding: bool = False,
         encoder_queue_maxsize: int = 30,
+        defer_video_encoding: bool = False,
     ):
         """
         2 modes are available for instantiating this class, depending on 2 different use cases:
@@ -192,6 +193,8 @@ class LeRobotDataset(torch.utils.data.Dataset):
                 instead of writing PNG images first. This makes save_episode() near-instant. Defaults to False.
             encoder_queue_maxsize (int, optional): Maximum number of frames to buffer per camera when using
                 streaming encoding. Defaults to 30 (~1s at 30fps).
+            defer_video_encoding (bool, optional): If True in write mode, keep
+                PNG frames and skip final batch video encoding. Defaults to False.
 
         Note:
             Write-mode parameters (``streaming_encoding``, ``batch_encoding_size``) passed to
@@ -258,17 +261,22 @@ class LeRobotDataset(torch.utils.data.Dataset):
             self.reader.load_and_activate()
 
         # Detect write-mode params for backward compatibility
-        _has_write_params = streaming_encoding or batch_encoding_size != 1
+        _has_write_params = streaming_encoding or batch_encoding_size != 1 or defer_video_encoding
         if _has_write_params:
             import warnings
 
             warnings.warn(
-                "Passing write-mode parameters (streaming_encoding, batch_encoding_size) to "
+                "Passing write-mode parameters (streaming_encoding, batch_encoding_size, "
+                "defer_video_encoding) to "
                 "LeRobotDataset.__init__() is deprecated. Use LeRobotDataset.resume() instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             streaming_enc = None
+            if defer_video_encoding and streaming_encoding:
+                raise ValueError("defer_video_encoding=True is incompatible with streaming_encoding=True.")
+            if defer_video_encoding and len(self.meta.video_keys) == 0:
+                raise ValueError("defer_video_encoding=True requires a dataset with video features.")
             if streaming_encoding and len(self.meta.video_keys) > 0:
                 streaming_enc = self._build_streaming_encoder(
                     self.meta.fps,
@@ -284,6 +292,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
                 batch_encoding_size=batch_encoding_size,
                 streaming_encoder=streaming_enc,
                 initial_frames=self.meta.total_frames,
+                defer_video_encoding=defer_video_encoding,
             )
         else:
             self.writer = None
@@ -651,6 +660,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
         encoder_threads: int | None = None,
         video_files_size_in_mb: int | None = None,
         data_files_size_in_mb: int | None = None,
+        defer_video_encoding: bool = False,
     ) -> "LeRobotDataset":
         """Create a new LeRobotDataset from scratch for recording data.
 
@@ -685,6 +695,8 @@ class LeRobotDataset(torch.utils.data.Dataset):
                 during capture instead of writing images first.
             encoder_queue_maxsize: Max buffered frames per camera when using
                 streaming encoding.
+            defer_video_encoding: If ``True``, keep PNG frames and skip final
+                batch video encoding. Intended for intermediate datasets.
 
         Returns:
             A new :class:`LeRobotDataset` in write mode.
@@ -713,6 +725,10 @@ class LeRobotDataset(torch.utils.data.Dataset):
         obj._return_uint8 = False
         obj._batch_encoding_size = batch_encoding_size
         obj._encoder_threads = encoder_threads
+        if defer_video_encoding and streaming_encoding:
+            raise ValueError("defer_video_encoding=True is incompatible with streaming_encoding=True.")
+        if defer_video_encoding and not use_videos:
+            raise ValueError("defer_video_encoding=True requires use_videos=True.")
 
         # Reader is lazily created on first access (write-only mode)
         obj.reader = None
@@ -729,6 +745,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
             encoder_threads=encoder_threads,
             batch_encoding_size=batch_encoding_size,
             streaming_encoder=streaming_enc,
+            defer_video_encoding=defer_video_encoding,
         )
 
         if image_writer_processes or image_writer_threads:
@@ -754,6 +771,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
         image_writer_threads: int = 0,
         streaming_encoding: bool = False,
         encoder_queue_maxsize: int = 30,
+        defer_video_encoding: bool = False,
     ) -> "LeRobotDataset":
         """Resume recording on an existing dataset.
 
@@ -785,6 +803,8 @@ class LeRobotDataset(torch.utils.data.Dataset):
             streaming_encoding: If ``True``, encode video in real-time during
                 capture.
             encoder_queue_maxsize: Max buffered frames per camera for streaming.
+            defer_video_encoding: If ``True``, keep PNG frames and skip final
+                batch video encoding. Intended for intermediate datasets.
 
         Returns:
             A :class:`LeRobotDataset` in write mode, ready to append episodes.
@@ -806,6 +826,8 @@ class LeRobotDataset(torch.utils.data.Dataset):
         obj._video_backend = video_backend if video_backend else get_safe_default_video_backend()
         obj._return_uint8 = False
         obj._batch_encoding_size = batch_encoding_size
+        if defer_video_encoding and streaming_encoding:
+            raise ValueError("defer_video_encoding=True is incompatible with streaming_encoding=True.")
 
         if obj._requested_root is not None:
             obj._requested_root.mkdir(exist_ok=True, parents=True)
@@ -820,6 +842,8 @@ class LeRobotDataset(torch.utils.data.Dataset):
 
         # Reader is lazily created on first access (write-only mode)
         obj.reader = None
+        if defer_video_encoding and len(obj.meta.video_keys) == 0:
+            raise ValueError("defer_video_encoding=True requires a dataset with video features.")
 
         streaming_enc = None
         if streaming_encoding and len(obj.meta.video_keys) > 0:
@@ -834,6 +858,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
             batch_encoding_size=batch_encoding_size,
             streaming_encoder=streaming_enc,
             initial_frames=obj.meta.total_frames,
+            defer_video_encoding=defer_video_encoding,
         )
 
         if image_writer_processes or image_writer_threads:

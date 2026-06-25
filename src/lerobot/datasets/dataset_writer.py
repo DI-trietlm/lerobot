@@ -101,6 +101,7 @@ class DatasetWriter:
         batch_encoding_size: int,
         streaming_encoder: StreamingVideoEncoder | None = None,
         initial_frames: int = 0,
+        defer_video_encoding: bool = False,
     ):
         """Initialize the writer with metadata, codec, and encoder config.
 
@@ -117,6 +118,9 @@ class DatasetWriter:
             streaming_encoder: Optional pre-built :class:`StreamingVideoEncoder`
                 for real-time encoding. ``None`` disables streaming mode.
             initial_frames: Starting frame count (non-zero when resuming).
+            defer_video_encoding: If ``True``, keep PNG frames and skip final
+                batch video encoding. Intended for intermediate datasets that
+                will be transformed before creating final videos.
         """
         self._meta = meta
         self._root = root
@@ -124,6 +128,7 @@ class DatasetWriter:
         self._encoder_threads = encoder_threads
         self._batch_encoding_size = batch_encoding_size
         self._streaming_encoder = streaming_encoder
+        self._defer_video_encoding = defer_video_encoding
 
         # Writer state
         self.image_writer: AsyncImageWriter | None = None
@@ -264,6 +269,7 @@ class DatasetWriter:
 
         has_video_keys = len(self._meta.video_keys) > 0
         use_streaming = self._streaming_encoder is not None and has_video_keys
+        use_deferred_encoding = self._defer_video_encoding and has_video_keys and not use_streaming
         use_batched_encoding = self._batch_encoding_size > 1
 
         if use_streaming:
@@ -289,7 +295,7 @@ class DatasetWriter:
                         for k, v in video_stats.items()
                     }
                 ep_metadata.update(self._save_episode_video(video_key, episode_index, temp_path=temp_path))
-        elif has_video_keys and not use_batched_encoding:
+        elif has_video_keys and not use_batched_encoding and not use_deferred_encoding:
             num_cameras = len(self._meta.video_keys)
             if parallel_encoding and num_cameras > 1:
                 with concurrent.futures.ProcessPoolExecutor(max_workers=num_cameras) as executor:
@@ -328,9 +334,9 @@ class DatasetWriter:
         # `meta.save_episode` need to be executed after encoding the videos
         self._meta.save_episode(episode_index, episode_length, episode_tasks, ep_stats, ep_metadata)
 
-        if has_video_keys and use_batched_encoding:
+        if has_video_keys and (use_batched_encoding or use_deferred_encoding):
             self._episodes_since_last_encoding += 1
-            if self._episodes_since_last_encoding == self._batch_encoding_size:
+            if not use_deferred_encoding and self._episodes_since_last_encoding == self._batch_encoding_size:
                 start_ep = self._meta.total_episodes - self._batch_encoding_size
                 end_ep = self._meta.total_episodes
                 self._batch_save_episode_video(start_ep, end_ep)
@@ -602,6 +608,12 @@ class DatasetWriter:
         """
         if self._streaming_encoder is not None:
             self._streaming_encoder.close()
+        elif self._defer_video_encoding:
+            if self._episodes_since_last_encoding > 0:
+                logger.info(
+                    "Skipping encoding for %s pending episode(s) because video encoding is deferred.",
+                    self._episodes_since_last_encoding,
+                )
         elif self._episodes_since_last_encoding > 0:
             start_ep = self._meta.total_episodes - self._episodes_since_last_encoding
             end_ep = self._meta.total_episodes
@@ -642,6 +654,9 @@ class DatasetWriter:
             self.image_writer = None
         # 2. Flush pending video encoding (streaming or batch)
         self.flush_pending_videos()
+        self._meta.info.video_encoding_deferred = (
+            self._defer_video_encoding and len(self._meta.video_keys) > 0 and self._streaming_encoder is None
+        )
         # 3. Close own parquet writer
         self.close_writer()
         # 4. Finalize metadata (idempotent)

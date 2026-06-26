@@ -182,3 +182,5 @@ models/*
 client.txt
 
 recorded_obs*/*
+
+xai_offline_compare_cache/*

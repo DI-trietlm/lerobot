@@ -1,0 +1,67 @@
+{
+  "server_address": "192.168.30.244:4567",
+  "robot": {
+    "type": "so100_follower",
+    "port": "COM6",
+    "disable_torque_on_disconnect": true,
+    "max_relative_target": null,
+    "cameras": {
+      "camera1": {
+        "type": "opencv",
+        "fps": 30,
+        "width": 1280,
+        "height": 720,
+        "index_or_path": 1,
+        "color_mode": "rgb",
+        "rotation": 0,
+        "warmup_s": 1,
+        "fourcc": null,
+        "backend": 0
+      },
+      "camera2": {
+        "type": "opencv",
+        "fps": 30,
+        "width": 640,
+        "height": 360,
+        "index_or_path": 0,
+        "color_mode": "rgb",
+        "rotation": 0,
+        "warmup_s": 1,
+        "fourcc": null,
+        "backend": 0
+      }
+    },
+    "use_degrees": true,
+    "id": "DI_VLA_FOLLOWER",
+    "calibration_dir": null
+  },
+  "task": "Pour from orange cup to blue cup.",
+  "policy_type": "smolvla",
+  "pretrained_name_or_path": "di-techinnova/smolvla-pouring-0.3-cutted",
+  "policy_device": "cuda",
+  "client_device": "cpu",
+  "rename_map": {
+    "observation.images.camera1": "observation.images.camera1",
+    "observation.images.camera2": "observation.images.camera2"
+  },
+  "actions_per_chunk": 35,
+  "chunk_size_threshold": 0.5,
+  "aggregate_fn_name": "weighted_average",
+  "rtc_execution_horizon": 10,
+  "rtc_max_guidance_weight": 10.0,
+  "rtc_prefix_attention_schedule": "EXP",
+  "rtc_debug": false,
+  "rtc_debug_maxlen": 100,
+  "inference_delay_steps": 2,
+  "xvla_domain_id": 15,
+  "fps": 15,
+  "obs_timestep_independent": false,
+  "image_compress_enable": true,
+  "image_compress_quality": 90,
+  "interpolation_multiplier": 1,
+  "debug_visualize_queue_size": true,
+  "record_obs_enable": false,
+  "record_obs_dir": "recorded_obs-0611",
+  "capture_attn_enable": false,
+  "capture_attn_dir": "attention_captures"
+}

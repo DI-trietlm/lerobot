@@ -184,5 +184,5 @@ client.txt
 recorded_obs*/*
 
 xai_offline_compare_cache/*
-xai_mode_probe_cache/*
+**/xai_mode_probe_cache/*
 xai/offline_compare_outputs/*

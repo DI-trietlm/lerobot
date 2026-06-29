@@ -28,6 +28,7 @@ Usage
 """
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -62,19 +63,31 @@ from lerobot.utils.constants import (  # noqa: E402
 
 OUTPUT_DIR = _HERE / "outputs"
 
+DEFAULT_STATE_KEYS = [
+    "shoulder_pan.pos",
+    "shoulder_lift.pos",
+    "elbow_flex.pos",
+    "wrist_flex.pos",
+    "wrist_roll.pos",
+    "gripper.pos",
+]
+
 
 def base_input_image(frame_t: torch.Tensor, size) -> torch.Tensor:
     """resize-with-pad a [1,3,H,W] frame in [0,1] to the model input size, kept in [0,1]."""
     return resize_with_pad(frame_t, *size, pad_value=0).clamp(0, 1)
 
 
-def predict_action(policy, base_imgs, cam_keys, lang_tokens, lang_masks, noise, device):
+def predict_action(policy, base_imgs, cam_keys, lang_tokens, lang_masks, noise, device, state=None):
     """Sample the action chunk for a set of (already model-sized, [0,1]) camera
     images, using a FIXED noise tensor. Returns a numpy array [chunk, action_dim]."""
     batch = {OBS_LANGUAGE_TOKENS: lang_tokens, OBS_LANGUAGE_ATTENTION_MASK: lang_masks}
     for k in cam_keys:
         batch[k] = base_imgs[k]
-    batch[OBS_STATE] = torch.zeros(1, policy.config.max_state_dim, device=device, dtype=torch.float32)
+    if state is None:
+        batch[OBS_STATE] = torch.zeros(1, policy.config.max_state_dim, device=device, dtype=torch.float32)
+    else:
+        batch[OBS_STATE] = state.to(device=device, dtype=torch.float32)
 
     images, img_masks = policy.prepare_images(batch)
     state = policy.prepare_state(batch)
@@ -96,7 +109,7 @@ def _iter_cells(s, grid):
 
 
 def occlusion_sensitivity(policy, base_imgs, cam_keys, target_key, lang_tokens, lang_masks,
-                          noise, grid, device, base_action):
+                          noise, grid, device, base_action, state=None):
     """Slide a gray patch over the target camera image; return a (grid, grid) map of
     L2 action change vs the unoccluded baseline."""
     img = base_imgs[target_key]  # [1,3,S,S] in [0,1]
@@ -109,14 +122,14 @@ def occlusion_sensitivity(policy, base_imgs, cam_keys, target_key, lang_tokens, 
         occ[:, :, y0:y1, x0:x1] = fill
         occ_imgs = dict(base_imgs)
         occ_imgs[target_key] = occ
-        act = predict_action(policy, occ_imgs, cam_keys, lang_tokens, lang_masks, noise, device)
+        act = predict_action(policy, occ_imgs, cam_keys, lang_tokens, lang_masks, noise, device, state=state)
         sens[r, c] = float(np.linalg.norm(act - base_action))
     return sens
 
 
 def occlusion_word_effect(policy, base_imgs, cam_keys, target_key,
                           full_tokens, full_masks, abl_tokens, abl_masks,
-                          noise, grid, device, e_base):
+                          noise, grid, device, e_base, state=None):
     """Isolate where a specific instruction word is grounded.
 
     The word's effect on the action is E(image) = action(full) - action(ablated).
@@ -134,8 +147,8 @@ def occlusion_word_effect(policy, base_imgs, cam_keys, target_key,
         occ[:, :, y0:y1, x0:x1] = fill
         occ_imgs = dict(base_imgs)
         occ_imgs[target_key] = occ
-        a_full = predict_action(policy, occ_imgs, cam_keys, full_tokens, full_masks, noise, device)
-        a_abl = predict_action(policy, occ_imgs, cam_keys, abl_tokens, abl_masks, noise, device)
+        a_full = predict_action(policy, occ_imgs, cam_keys, full_tokens, full_masks, noise, device, state=state)
+        a_abl = predict_action(policy, occ_imgs, cam_keys, abl_tokens, abl_masks, noise, device, state=state)
         eff[r, c] = float(np.linalg.norm((a_full - a_abl) - e_base))
     return eff
 
@@ -146,6 +159,38 @@ def ablate_word(text: str, word: str) -> str:
 
     out = re.sub(rf"\b{re.escape(word)}\b", "", text, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", out).strip()
+
+
+def _load_metadata_states(obs_dir: Path, state_keys: list[str]) -> dict[int, torch.Tensor]:
+    meta_path = obs_dir / "metadata.jsonl"
+    if not meta_path.exists():
+        return {}
+    states = {}
+    with meta_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            state = row.get("state")
+            timestep = row.get("timestep")
+            if not isinstance(state, dict) or timestep is None:
+                continue
+            try:
+                values = [float(state[k]) for k in state_keys]
+            except KeyError:
+                continue
+            states[int(timestep)] = torch.tensor(values, dtype=torch.float32).unsqueeze(0)
+    return states
+
+
+def _state_for_frame(frame_path: Path, state_by_timestep: dict[int, torch.Tensor]) -> torch.Tensor | None:
+    if not state_by_timestep:
+        return None
+    timestep = int(frame_path.stem)
+    if timestep in state_by_timestep:
+        return state_by_timestep[timestep]
+    nearest = min(state_by_timestep, key=lambda t: abs(t - timestep))
+    return state_by_timestep[nearest]
 
 
 def main(args):
@@ -189,6 +234,10 @@ def main(args):
         args.cameras[b]: sorted((obs_dir / "images" / args.cameras[b]).glob("*.png"))
         for b in range(n_render)
     }
+    state_keys = [item.strip() for item in args.state_keys.split(",") if item.strip()]
+    state_by_timestep = _load_metadata_states(obs_dir, state_keys) if args.use_metadata_state else {}
+    if args.use_metadata_state:
+        print(f"metadata states loaded: {len(state_by_timestep)}")
 
     for f_idx in args.frames:
         t0 = time.time()
@@ -204,9 +253,14 @@ def main(args):
             else:
                 base_imgs[key] = torch.zeros(1, 3, *size, device=device, dtype=torch.float32)
 
-        base_action = predict_action(policy, base_imgs, cam_keys, lang_tokens, lang_masks, noise, device)
+        state = _state_for_frame(frame_lists[args.cameras[0]][f_idx], state_by_timestep)
+        base_action = predict_action(
+            policy, base_imgs, cam_keys, lang_tokens, lang_masks, noise, device, state=state
+        )
         if word_mode:
-            a_abl_base = predict_action(policy, base_imgs, cam_keys, abl_tokens, abl_masks, noise, device)
+            a_abl_base = predict_action(
+                policy, base_imgs, cam_keys, abl_tokens, abl_masks, noise, device, state=state
+            )
             e_base = base_action - a_abl_base  # the word's effect on the action (unoccluded)
 
         # One figure per frame: source + occlusion overlay for each analysed camera.
@@ -217,20 +271,23 @@ def main(args):
             if word_mode:
                 smap = occlusion_word_effect(
                     policy, base_imgs, cam_keys, key, lang_tokens, lang_masks,
-                    abl_tokens, abl_masks, noise, args.grid, device, e_base,
+                    abl_tokens, abl_masks, noise, args.grid, device, e_base, state=state,
                 )
                 row_title = f'{cam}  "{args.word}"-effect grounding (|Δ word-effect|)'
             else:
                 smap = occlusion_sensitivity(
                     policy, base_imgs, cam_keys, key, lang_tokens, lang_masks,
-                    noise, args.grid, device, base_action,
+                    noise, args.grid, device, base_action, state=state,
                 )
                 row_title = f"{cam}  occlusion sensitivity (|Δaction|)"
             disp = (raw_for_disp[b][0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
             overlay = _attn.overlay_heatmap(disp, _attn.normalize01(smap), args.alpha, args.cmap)
 
             axes[0, b].imshow(disp)
-            axes[0, b].set_title(f"{cam}  (frame {frame_lists[cam][f_idx].name})", fontsize=10)
+            state_label = "metadata-state" if state is not None else "zero-state"
+            axes[0, b].set_title(
+                f"{cam}  (frame {frame_lists[cam][f_idx].name}, {state_label})", fontsize=10
+            )
             axes[0, b].axis("off")
             axes[1, b].imshow(overlay)
             axes[1, b].set_title(row_title, fontsize=10)
@@ -275,6 +332,10 @@ def parse_args():
     p.add_argument("--alpha", type=float, default=0.55)
     p.add_argument("--cmap", default="turbo")
     p.add_argument("--seed", type=int, default=0, help="Fixed flow-matching noise seed")
+    p.add_argument("--use-metadata-state", action=argparse.BooleanOptionalAction, default=True,
+                   help="Use metadata.jsonl state for the analysed frame when available")
+    p.add_argument("--state-keys", default=",".join(DEFAULT_STATE_KEYS),
+                   help="Comma-separated state key order for metadata.jsonl")
     p.add_argument("--word", default=None,
                    help="Isolate where this instruction word is grounded (word-contrast mode). "
                         "Doubles runtime: runs full vs ablated instruction per occlusion.")

@@ -292,6 +292,7 @@ class RTCXVLAControlGUI(tk.Tk):
                 ),
             ],
             "RTC": [
+                _FieldSpec("rtc_enabled", "RTC Enabled", "true", "bool", ("true", "false")),
                 _FieldSpec("rtc_execution_horizon", "RTC Execution Horizon", "10", "int"),
                 _FieldSpec("rtc_max_guidance_weight", "RTC Max Guidance Weight", "10.0", "float"),
                 _FieldSpec(
@@ -602,7 +603,7 @@ class RTCXVLAControlGUI(tk.Tk):
             interpolation_multiplier=self._parse_int("interpolation_multiplier"),
             aggregate_fn_name=self._vars["aggregate_fn_name"].get().strip(),
             debug_visualize_queue_size=self._parse_bool("debug_visualize_queue_size"),
-            rtc_enabled=True,
+            rtc_enabled=self._parse_bool("rtc_enabled"),
             rtc_execution_horizon=self._parse_int("rtc_execution_horizon"),
             rtc_max_guidance_weight=self._parse_float("rtc_max_guidance_weight"),
             rtc_prefix_attention_schedule=schedule,
@@ -641,6 +642,7 @@ class RTCXVLAControlGUI(tk.Tk):
             "actions_per_chunk": cfg.actions_per_chunk,
             "chunk_size_threshold": cfg.chunk_size_threshold,
             "aggregate_fn_name": cfg.aggregate_fn_name,
+            "rtc_enabled": cfg.rtc_enabled,
             "rtc_execution_horizon": cfg.rtc_execution_horizon,
             "rtc_max_guidance_weight": cfg.rtc_max_guidance_weight,
             "rtc_prefix_attention_schedule": getattr(schedule, "value", str(schedule)),

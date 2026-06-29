@@ -427,3 +427,268 @@ Cần offline model replay/ablation trên chính recorded observations:
 5. Plot projection `p(predicted chunk)` so với `p(current_state)`.
 
 Notebook đề xuất: `xai/offline_replay_recorded_obs_0629.ipynb`.
+
+## 14. Cập nhật sau offline replay notebook
+
+Notebook `xai/offline_replay_recorded_obs_0629.ipynb` đã chạy xong và sinh:
+
+- `xai/offline_replay_recorded_obs_0629_outputs/ablation_predictions.csv`
+- `xai/offline_replay_recorded_obs_0629_outputs/ablation_summary.csv`
+- `xai/offline_replay_recorded_obs_0629_outputs/recorded_obs-0629-01_ablation_p_end.png`
+- `xai/offline_replay_recorded_obs_0629_outputs/recorded_obs-0629-02_ablation_p_end.png`
+
+Kết quả này từng **supersede** một phần kết luận ở mục 11-13, nhưng sau đó đã bị dữ liệu live non-RTC mới bác bỏ thêm. Xem mục 15.
+
+### 14.1 Notebook chạy hợp lệ
+
+- Cell 1 xác nhận chạy trên `cuda`, cả hai run `recorded_obs-0629-01` và `recorded_obs-0629-02` tồn tại.
+- Cell 2 chọn probe timesteps:
+  - `0629-01`: 20 điểm từ `0` tới `325`.
+  - `0629-02`: 21 điểm từ `0` tới `222`.
+- Cell 3 load `new_latest = di-techinnova/smolvla-pouring-0.3-cutted`.
+  - Chỉ model mới được chạy; old 50-episode revision chưa được replay trong notebook này.
+  - Có warning tokenizer/model config, nhưng inference vẫn hoàn tất.
+- Cell 5 sinh `3280` predictions, `0` errors.
+- Cell 6 sinh `164` summary rows.
+- Cell 7 sinh đủ 2 plot ablation.
+
+### 14.2 Base non-RTC policy không tự kéo về safe pose
+
+Trong `ablation_summary.csv`, với ablation chính `current_image_current_state`:
+
+- Không có row nào thỏa `p_end_mean > current_p + 0.05`.
+- Không có row nào thỏa `p_first_mean > current_p + 0.05`.
+
+Tổng hợp theo run:
+
+| run | current_p mean | p_end_mean | end_minus_current_p mean |
+|---|---:|---:|---:|
+| `recorded_obs-0629-01` | `0.528` | `0.045` | `-0.483` |
+| `recorded_obs-0629-02` | `0.779` | `0.132` | `-0.647` |
+
+Nghĩa là khi replay offline theo đường **base non-RTC**, model không dự đoán đi sâu hơn về safe pose. Ngược lại, chunk endpoint thường nằm thấp hơn rất nhiều so với current projection.
+
+### 14.3 Ảnh plot xác nhận điều này
+
+Hai plot:
+
+- `recorded_obs-0629-01_ablation_p_end.png`
+- `recorded_obs-0629-02_ablation_p_end.png`
+
+đều có cùng pattern:
+
+- Đường `current_image_current_state` luôn nằm thấp hơn đường `p_end = current_p`.
+- Đường `start_image_current_state` cao hơn `current_image_current_state`, nhưng vẫn nằm thấp hơn xa current khi current đã gần safe.
+- Hai ablation dùng `start_state` gần như flat quanh `p_end ~= -0.11`.
+- Không đường nào tiến tới vùng `p=1`.
+
+Vì vậy hình ảnh không ủng hộ giả thuyết base model thuần đang có safe-pose attractor trên recorded observations.
+
+### 14.4 Runtime server và offline replay khác nhau rất lớn
+
+Đối chiếu cùng timestep giữa runtime `server_actions.jsonl` và offline replay `current_image_current_state`:
+
+| run | obs | current p | runtime post end p | offline non-RTC end p |
+|---|---:|---:|---:|---:|
+| `0629-01` | `49` | `0.096` | `0.378` | `-0.078` |
+| `0629-01` | `66` | `0.119` | `0.810` | `-0.055` |
+| `0629-01` | `119` | `0.158` | `0.742` | `-0.043` |
+| `0629-01` | `134` | `0.444` | `0.934` | `0.040` |
+| `0629-02` | `50` | `0.306` | `0.661` | `-0.010` |
+| `0629-02` | `52` | `0.300` | `0.951` | `-0.014` |
+| `0629-02` | `101` | `0.829` | `0.913` | `0.147` |
+
+Sai khác trung bình `runtime post end p - offline end p`:
+
+- `0629-01`: `+0.613`
+- `0629-02`: `+0.543`
+
+Đây là sai khác quá lớn để coi là noise seed thông thường.
+
+### 14.5 Chẩn đoán tạm thời từ notebook: nghi phạm RTC-conditioned generation
+
+Source server cho thấy khi `rtc_enabled=True`, action không được sinh bởi base call:
+
+```python
+policy.predict_action_chunk(observation)
+```
+
+mà bởi:
+
+```python
+policy.predict_action_chunk(
+    observation,
+    inference_delay=current_delay,
+    prev_chunk_left_over=prev_actions,
+)
+```
+
+Sau đó server mới log `postprocessed_action`.
+
+Vì vậy kết luận cũ "`postprocessed_action` nghĩa là raw/base policy sau unnormalizer" là chưa chính xác trong RTC mode. Trong hai run này, `postprocessed_action` là action sau **RTC-conditioned model generation**, rồi mới unnormalize.
+
+Điều vẫn đúng:
+
+- `sent_action == postprocessed_action[rtc_real_delay:]`.
+- Phần cắt delay không tự tạo vector mới.
+
+Điều cần sửa:
+
+- RTC không chỉ cắt delay ở cuối pipeline.
+- RTC còn đi vào chính `predict_action_chunk()` thông qua `prev_chunk_left_over` và `inference_delay`.
+- Safe-directed action xuất hiện trước khi gửi client, nhưng nhiều khả năng đã xuất hiện do RTC-conditioned generation, không phải base non-RTC model.
+
+### 14.6 Các giả thuyết sau notebook
+
+**Nghi phạm chính: RTC path dependence / history conditioning.**
+
+- Runtime bật `rtc_enabled=true`.
+- Offline replay hiện tại là non-RTC.
+- Runtime có safe-pull mạnh.
+- Offline non-RTC không có safe-pull.
+- Source xác nhận RTC truyền `prev_chunk_left_over` vào model.
+
+**Nghi phạm phụ: queue/aggregation làm khuếch đại sai lệch.**
+
+- Client queue dài và overlap nhiều.
+- Aggregation không phải nguồn đầu tiên, nhưng có thể giữ hướng sai đủ lâu để robot đi sâu về safe.
+
+**Yếu đi: underfit/base safe attractor.**
+
+- Nếu base model underfit trực tiếp về safe, offline non-RTC phải tái hiện safe-pull trên recorded obs.
+- Kết quả hiện tại không tái hiện.
+
+**Yếu đi: stochastic multimode là nguyên nhân chính.**
+
+- 20 seeds mỗi điểm.
+- `p_end_std` thấp, thường khoảng `0.005-0.018`.
+- Không có seed-mean nào kéo vượt current về safe.
+
+**Yếu đi: image trigger đơn lẻ.**
+
+- `current_image_start_state` gần flat quanh start-ish output.
+- `start_image_current_state` vẫn theo current state nhiều hơn image.
+- Image có ảnh hưởng, nhưng không đủ giải thích safe drift.
+
+**Yếu đi: robot/controller tự về safe.**
+
+- Current state bám command tương đối tốt.
+- Runtime command/action đã đi theo hướng safe trước khi robot tới đó.
+
+### 14.7 Kết luận tạm thời sau notebook
+
+Mô hình lỗi hiện tại hợp lý nhất là:
+
+```text
+base non-RTC SmolVLA trên recorded obs
+    -> không kéo safe rõ ràng
+
+live RTC SmolVLA
+    -> dùng prev_chunk_left_over + inference_delay
+    -> chunk mới bị điều kiện hóa bởi history/queue
+    -> một sai lệch nhỏ ban đầu được RTC làm thành trajectory liên tục
+    -> postprocessed_action trong server log kéo mạnh về safe
+    -> client nhận/aggregate action đó
+    -> robot bám command và đi về safe
+```
+
+Vì vậy bước kiểm chứng tiếp theo nên ưu tiên:
+
+1. Chạy live hoặc offline replay với `rtc_enabled=false`.
+2. Chạy RTC nhưng giảm `rtc_max_guidance_weight` từ `10.0` xuống `1.0-2.0`.
+3. Log thêm projection của `prev_chunk_left_over` trước mỗi inference.
+4. Log song song base non-RTC chunk và RTC-conditioned chunk trên cùng observation để đo trực tiếp delta.
+
+## 15. Cập nhật sau live probe non-RTC và RTC2
+
+Hai run mới:
+
+- `recorded_obs-0629-nonrtc`
+- `recorded_obs-0629-rtc2`
+
+đã bác bỏ kết luận tạm thời ở mục 14 rằng RTC là nguồn chính.
+
+### 15.1 Non-RTC live vẫn đi về safe pose
+
+Run `recorded_obs-0629-nonrtc`:
+
+- `server_actions.jsonl` xác nhận `rtc_enabled = false` cho toàn bộ `21/21` chunks.
+- `rtc_real_delay = None` cho toàn bộ chunks.
+- Current state:
+  - đầu run: `p = 0.000`
+  - cuối run: `p = 0.897`
+  - max: `p = 0.927`
+  - dist-to-safe giảm từ `147.68` xuống `28.63`.
+- Server action:
+  - `postprocessed_action == sent_action` về mặt horizon; non-RTC không có cắt RTC.
+  - `9/21` chunks có `post_end_p > current_p + 0.05`.
+  - Các chunk rõ nhất:
+
+| obs | current p | post end p | delta |
+|---:|---:|---:|---:|
+| `17` | `0.206` | `0.776` | `+0.570` |
+| `19` | `0.171` | `0.660` | `+0.489` |
+| `38` | `0.224` | `0.829` | `+0.605` |
+| `55` | `0.548` | `0.758` | `+0.211` |
+| `57` | `0.596` | `0.852` | `+0.256` |
+
+Kết luận: live safe drift **không cần RTC**.
+
+### 15.2 RTC2 cũng đi về safe pose
+
+Run `recorded_obs-0629-rtc2`:
+
+- `server_actions.jsonl` xác nhận `rtc_enabled = true`.
+- `rtc_max_guidance_weight = 2.0` theo config probe.
+- Current state:
+  - đầu run: `p = 0.000`
+  - cuối run: `p = 0.886`
+  - max: `p = 0.967`
+  - dist-to-safe giảm từ `147.79` xuống `29.56`.
+- Server action:
+  - `10/19` chunks có `post_end_p > current_p + 0.05`.
+  - Các chunk rõ nhất:
+
+| obs | current p | post end p | delta |
+|---:|---:|---:|---:|
+| `15` | `0.292` | `0.829` | `+0.538` |
+| `17` | `0.283` | `0.617` | `+0.334` |
+| `32` | `0.403` | `0.866` | `+0.463` |
+| `34` | `0.385` | `0.923` | `+0.538` |
+| `49` | `0.587` | `0.915` | `+0.328` |
+
+Kết luận: giảm RTC guidance từ `10` xuống `2` không loại bỏ safe drift.
+
+### 15.3 Kết luận sửa lại
+
+Kết luận đúng hơn sau live non-RTC:
+
+```text
+safe drift xuất hiện trong live base/non-RTC policy output
+    -> không phải do RTC là nguồn chính
+    -> không phải do client aggregation là nguồn chính
+    -> không phải do robot/controller tự trôi về safe
+```
+
+RTC và aggregation vẫn có thể làm mượt/khuếch đại trajectory đã sai, nhưng chúng không phải điều kiện cần.
+
+### 15.4 Mâu thuẫn còn lại: offline non-RTC notebook không tái tạo live non-RTC
+
+Notebook offline trước đó chạy non-RTC trên hai run cũ `0629-01/02` nhưng không thấy safe-pull. Live non-RTC mới lại safe-pull rất rõ.
+
+Sau khi kiểm tra lại notebook, có một lỗi pipeline replay cụ thể:
+
+- Server live dùng `raw_observation_to_observation()`.
+- Notebook cũ dùng `prepare_raw_observation()` trực tiếp.
+- Vì vậy notebook thiếu bước `prepare_image(v).unsqueeze(0)`, tức thiếu scale ảnh về `[0, 1]` và thiếu batch dim theo đúng server path trước policy preprocessor.
+
+Do đó kết quả notebook offline cũ **không còn là bằng chứng hợp lệ** để bác bỏ server JSONL. Notebook đã được sửa để dùng `raw_observation_to_observation()` giống server.
+
+Vì vậy nghi phạm quan trọng hiện tại không còn là RTC, mà là một trong các điểm sau:
+
+1. Base SmolVLA live thật sự dự đoán safe-pull trong một số observation/state.
+2. Offline replay trước đó sai pipeline nên không tái tạo server.
+3. Cần rerun notebook đã sửa trên chính `recorded_obs-0629-nonrtc` và các run cũ để khớp server JSONL.
+4. Sau khi replay đúng pipeline, nếu vẫn lệch server thì mới xét tiếp khác biệt transport/JPEG/state serialization.
+
+Bước tiếp theo nên là replay offline trên chính `recorded_obs-0629-nonrtc`, không phải hai run cũ, rồi so `postprocessed_action` offline với `server_actions.jsonl` cùng timestep.

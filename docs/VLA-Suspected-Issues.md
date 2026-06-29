@@ -1,89 +1,185 @@
 # VLA Suspected Issues
 
-Tài liệu này gom các lỗi/nghi vấn hiện tại quanh pipeline record -> cut -> train -> infer cho SO-ARM pouring task. Mục tiêu là tách rõ phần đã có bằng chứng, phần chỉ là giả thuyết, và bước kiểm chứng tiếp theo.
+Tài liệu này tổng hợp các nghi vấn hiện tại quanh pipeline record -> cut -> train -> infer cho SO-ARM pouring task, đã cập nhật theo notebook mới nhất `xai/offline_action_mode_probe_smolvla.ipynb`.
+
+Mục tiêu: tách rõ điều đã có bằng chứng, điều notebook đã làm yếu đi, và điều cần log ở runtime để kết luận.
 
 ## Bối cảnh ngắn
 
 - Task: `Pour from orange cup to blue cup.`
 - Dataset chính: `di-techinnova/so-arm-101-pouring-0.3-cutted`
-- Model old: train trên khoảng 50 episodes, khoảng 18K steps, hành vi ngoài đời có vẻ ổn hơn.
-- Model new: train trên khoảng 175-200 episodes, khoảng 150K steps, inference thường loanh quanh start pose rồi nhìn giống quay về gần safe pose.
-- Notebook phân tích: `xai/offline_compare_smolvla_old_new.ipynb`
-- Output đã đọc: các bảng dataframe, camera probe, và trajectory plots old/new trên nhiều episode probe.
+- Model old: train khoảng 50 episodes / khoảng 18K steps, ngoài đời có vẻ ổn hơn.
+- Model new: train khoảng 175-200 episodes / nhiều steps hơn, ngoài đời có run thành công, run đi lệch/quá cốc, và run đi dần về gần safe pose.
+- Notebook cũ: `xai/offline_compare_smolvla_old_new.ipynb`
+- Notebook mới: `xai/offline_action_mode_probe_smolvla.ipynb`
+- Output notebook mới đã đọc: 36 outputs, 10 ảnh, 10 bảng, 0 error.
 
-## 1. New model bị conservative / under-active
+## Kết luận cập nhật
+
+Notebook mới **không chứng minh raw new policy có safe-pull/overshoot/multi-mode mạnh trên cùng dataset observation**.
+
+Tín hiệu mạnh nhất hiện tại là:
+
+1. New model thường có early action gần `current_state` hơn old.
+2. New model có `chunk_mean_speed` thấp hơn old ở các start-frame probe.
+3. Offline phase sweep gần như không thấy safe-pull rõ.
+4. Offline phase sweep không thấy overshoot theo threshold hiện tại.
+5. Lỗi ngoài đời có thể nằm ở hệ closed-loop: raw policy chunk -> aggregation/queue -> RTC -> robot dynamics -> observation tiếp theo.
+
+Vì vậy nghi vấn chính chuyển từ "raw model tự chọn safe mode ngay lập tức" sang:
+
+**new policy under-active trong early action, và lỗi safe-like drift nhiều khả năng xuất hiện trong runtime closed-loop hoặc trên recorded observations thật, không phải trong dataset-frame one-shot probe.**
+
+## 1. New model under-active / stay-current bias
 
 **Mức độ nghi ngờ:** cao.
 
 Triệu chứng:
 
-- Robot thường loanh quanh ở start pose.
-- Action đầu của new model thường gần current state hơn old model.
-- Nhìn ngoài đời giống "về safe pose", nhưng hiện tại chưa đủ bằng chứng rằng model học một safe-pose attractor thật sự.
+- Ngoài đời có run robot loanh quanh hoặc không rời vùng thao tác đủ quyết đoán.
+- Offline new model thường có first/early action gần current state hơn old.
+- `chunk_mean_speed` của new thấp hơn old trong deep probe start frames.
 
-Bằng chứng từ notebook:
+Bằng chứng từ notebook cũ:
 
-- Trung bình trên các episode probe:
+- Trung bình trên probe set:
   - `first_action_dist_state`: new khoảng `5.33`, old khoảng `7.87`.
-  - Tức new action gần state hiện tại hơn old.
-- Theo episode:
-  - ep0: new `5.88`, old `14.52`
-  - ep1: new `3.84`, old `4.68`
-  - ep2: new `3.63`, old `4.03`
-  - ep10: new `3.19`, old `4.16`
-  - ep51: new `5.38`, old `13.18`
-  - ep120: new `6.99`, old `9.06`
-  - ep145: new `6.63`, old `7.82`
 
-Giải thích khả dĩ:
+Bằng chứng từ notebook mới, deep probe 100 seed trên start frame:
 
-- New model không chủ động đi về safe pose từ mọi trạng thái.
-- New model có xu hướng output action gần current/reset pose.
-- Vì reset/start pose thường gần safe pose, biểu hiện ngoài đời bị nhìn thành "về safe pose".
+- ep0:
+  - new `first_action_dist_state_mean = 6.996`
+  - old `first_action_dist_state_mean = 15.740`
+  - new `chunk_mean_speed_mean = 4.061`
+  - old `chunk_mean_speed_mean = 5.181`
+- ep51:
+  - new `first_action_dist_state_mean = 6.187`
+  - old `14.696`
+  - new `chunk_mean_speed_mean = 3.997`
+  - old `5.267`
+- ep120:
+  - new `chunk_mean_speed_mean = 3.067`
+  - old `4.824`
+- ep145:
+  - new `chunk_mean_speed_mean = 3.431`
+  - old `4.800`
+
+Ở 8/8 start-frame probe, `chunk_mean_speed` của new thấp hơn old.
+
+Kết luận:
+
+- Đây là nghi vấn model-level mạnh nhất hiện tại.
+- Nhưng nó **chưa đủ** để giải thích toàn bộ hiện tượng đi dần về safe pose ngoài đời.
 
 Bước kiểm chứng:
 
-- Dùng `recorded_obs` của các lần infer fail.
+- Replay `recorded_obs` thật của run fail.
 - Plot theo thời gian:
-  - `dist(action, current_state)`
-  - `dist(action, safe_pose)`
+  - `dist(raw_first_action, current_state)`
+  - `dist(raw_chunk_end, current_state)`
+  - `chunk_mean_speed`
   - `dist(current_state, safe_pose)`
-- Nếu `action` luôn gần `current_state`, lỗi là under-active/stay-put.
-- Nếu `action` kéo về safe dù `current_state` xa safe, khi đó mới gọi là safe-pose attractor thật.
+  - `dist(current_state, start_pose)`
 
-## 2. Safe-pose attractor chưa được chứng minh
+## 2. Safe-pose attractor trong raw policy chưa được chứng minh
 
-**Mức độ nghi ngờ:** trung bình thấp ở thời điểm hiện tại.
+**Mức độ nghi ngờ:** thấp đến trung bình, cần recorded_obs thật.
 
-Triệu chứng:
+Triệu chứng ngoài đời:
 
-- Khi infer thật, robot sau một lúc thường quay về gần safe pose.
+- Một số run robot đi dần về gần safe pose.
 
-Bằng chứng chống lại giả thuyết "safe pose attractor toàn cục":
+Notebook mới làm yếu giả thuyết "raw policy có safe attractor ngay trên dataset-frame":
 
-- Trong notebook, ở các episode có start state xa safe, new model không kéo action về safe:
-  - ep1 `first_action_dist_safe`: new khoảng `147.39`, old khoảng `146.84`
-  - ep2: new khoảng `148.19`, old khoảng `149.50`
-  - ep10: new khoảng `149.17`, old khoảng `148.84`
-- Nếu là attractor toàn cục về safe, các distance này đáng ra phải thấp hơn rõ rệt.
+- Phase sweep safe-pull rate gần như toàn 0.
+- Heatmap `new safe-pull rate` chỉ có vài điểm nhỏ, max khoảng `0.12`.
+- Deep suspicious frame ep10 frame25 có:
+  - `safe_pull_rate_new = 0`
+  - `overshoot_rate_new = 0`
+  - `stay_current_rate_new = 0.92`
 
-Bằng chứng vẫn còn đáng chú ý:
+Điểm cần phân biệt:
 
-- Ở ep0 và ep51, start state gần safe, new model output gần safe hơn old.
+- `start_pose`: pose robot lúc bắt đầu run/eval.
+- `safe_pose`: pose an toàn cố định.
+
+Không được gọi một run là safe-pose drift nếu chỉ thấy robot quanh start pose. Cần chứng minh:
+
+- `dist(current_state, safe_pose)` giảm theo thời gian;
+- đồng thời `dist(current_state, start_pose)` tăng hoặc không giảm tương ứng.
+
+Bước kiểm chứng:
+
+- Log runtime và plot:
+  - `dist(current_state_t, start_pose)`
+  - `dist(current_state_t, safe_pose)`
+  - `dist(raw_action_t, safe_pose)`
+  - `dist(executed_action_t, safe_pose)`
+
+Nếu raw action không kéo về safe nhưng executed/current state vẫn về safe, nghi phạm nằm sau raw policy: aggregation, RTC, queue, controller, hoặc robot dynamics.
+
+## 3. Raw multi-mode stochastic policy chưa được chứng minh mạnh
+
+**Mức độ nghi ngờ:** trung bình thấp sau notebook mới.
+
+Giả thuyết ban đầu:
+
+- Cùng một observation, new model có thể sinh nhiều mode: success, overshoot, safe-like.
+
+Notebook mới kiểm tra trực tiếp:
+
+- Cùng 1 observation, chạy nhiều seed.
+- PCA action chunk và k-means cluster.
+- Phase sweep nhiều episode/frame.
+
+Kết quả:
+
+- PCA/cluster xuất hiện ở cả old và new.
+- `pca_spread` và `cluster_entropy` new/old khá gần nhau trên start frames.
 - ep0:
-  - old `first_action_dist_safe`: khoảng `18.43`
-  - new `first_action_dist_safe`: khoảng `10.14`
+  - new `pca_spread = 3.671`, old `3.668`
+  - new cluster counts `[32, 37, 31]`, old `[28, 40, 32]`
+- Không thấy 3 cụm tách thành success/overshoot/safe rõ ràng.
+- Suspicious frame ep10 frame25 có cluster `[16, 8, 1]`, trong đó cụm `n=1` là outlier, không phải mode lớn.
 
-Kết luận tạm:
+Kết luận:
 
-- Chưa nên gọi đây là lỗi "model học safe pose".
-- Gọi chính xác hơn: "model under-active, và start pose gần safe nên nhìn giống về safe".
+- Không nên coi raw stochastic multi-mode là nguyên nhân chính nếu chỉ dựa vào dataset-frame offline.
+- Vẫn có thể có multi-mode trên **recorded_obs thật**, khi camera/view/state đã lệch khỏi training distribution.
 
-## 3. Config/action horizon giữa old và new không khớp
+Bước kiểm chứng:
 
-**Mức độ nghi ngờ:** cao.
+- Chạy cùng notebook/probe trên `recorded_obs` từ run fail và run success.
+- So PCA/cluster trên từng timestep runtime thật.
 
-Bằng chứng từ notebook load model:
+## 4. Overshoot chưa xuất hiện trong offline threshold hiện tại
+
+**Mức độ nghi ngờ:** thấp trong raw offline, nhưng chưa loại trừ runtime.
+
+Notebook mới:
+
+- Heatmap `new overshoot rate` bằng 0 toàn bộ.
+- Top suspicious observations đều có `overshoot_rate_new = 0`.
+
+Ý nghĩa:
+
+- Offline dataset-frame probe không giải thích được run ngoài đời "đi qua/quá cốc".
+- Overshoot ngoài đời có thể xuất hiện do:
+  - camera/runtime observation khác dataset;
+  - closed-loop tích lũy nhiều action chunk;
+  - aggregation/queue execute phần không mong muốn;
+  - threshold overshoot trong notebook chưa đo đúng workspace/cup-relative progress.
+
+Bước kiểm chứng:
+
+- Cần metric overshoot theo task/world/image space, không chỉ joint-space first action distance.
+- Log cup-relative progress hoặc image-space cup position trong runtime.
+
+## 5. Config/action horizon không còn là nghi phạm chính
+
+**Mức độ nghi ngờ:** thấp đến trung bình.
+
+Bằng chứng:
 
 - Old model:
   - `chunk_size = 30`
@@ -92,60 +188,73 @@ Bằng chứng từ notebook load model:
   - `chunk_size = 35`
   - `n_action_steps = 35`
 
-Vì sao đáng ngại:
+Cập nhật theo phân tích mới:
 
-- Đây là khác biệt thật giữa checkpoint old và new.
-- Nếu client/server đang dùng `actions_per_chunk`, `rtc_execution_horizon`, hoặc aggregation theo giả định khác với config train, hành vi có thể bị mượt quá, chậm phản ứng, hoặc conservative hơn.
-- Nó làm phép so sánh old/new kém sạch.
-
-Bước kiểm chứng:
-
-- Retrain một bản new-control với cùng:
-  - `--policy.chunk_size=30`
-  - `--policy.n_action_steps=30`
-- So offline trên cùng notebook:
-  - `first_action_dist_state`
-  - trajectory mean/std
-  - chunk trajectory theo từng joint
-- Chỉ thay đổi một biến này trước khi thay đổi nhiều thứ khác.
-
-## 4. Training config có thể bị ghi đè hoặc không đúng như lệnh CLI
-
-**Mức độ nghi ngờ:** trung bình cao.
-
-Triệu chứng đã từng thấy:
-
-- Người dùng chạy lệnh train với scheduler/lr/decay cụ thể.
-- Training config sau đó có nhiều giá trị khác kỳ vọng, ví dụ decay steps, lr, hoặc action horizon.
-
-Nguy cơ:
-
-- `policy.path=lerobot/smolvla_base` có thể mang sẵn config.
-- Hub checkpoint/config có thể ghi đè một phần CLI.
-- Một số field policy/scheduler có thể nằm trong nested config và không override theo cách tưởng tượng.
+- `chunk_size=35` không nên mặc định bị coi là lỗi.
+- Hugging Face/action autocorrelation gợi ý chunk length khoảng `37` steps, nên `35` là hợp lý với phân phối action hiện tại.
+- Khác biệt old/new vẫn cần ghi nhớ khi so sánh, nhưng không phải nghi phạm chính.
 
 Bước kiểm chứng:
 
-- Sau khi launch train, luôn lưu và đọc lại config thực tế từ output dir.
-- So sánh:
-  - command line
-  - `train_config.json`
-  - `policy_config.json`
-  - checkpoint pushed lên Hub
-- Fail sớm nếu các field critical không khớp:
-  - `chunk_size`
-  - `n_action_steps`
-  - `optimizer_lr`
-  - scheduler type
-  - warmup/decay steps
-  - `freeze_vision_encoder`
-  - expert-only / full fine-tune mode nếu có
+- Đảm bảo inference client/server không cắt/aggregate chunk theo giả định sai.
+- Log:
+  - raw chunk length;
+  - số action thực sự execute;
+  - chunk queue length;
+  - action index trong chunk được execute.
 
-## 5. New dataset không lệch tổng thể về safe pose
+## 6. Aggregation / queue / receding horizon là nghi phạm runtime quan trọng
+
+**Mức độ nghi ngờ:** cao.
+
+Lý do:
+
+- Offline one-shot chunk không tái hiện safe drift rõ.
+- Ngoài đời là closed-loop nhiều timestep.
+- Nếu mỗi vòng inference lấy chunk mới, phần đầu chunk có thể luôn conservative.
+- Nếu aggregation trung bình nhiều chunk không thống nhất, action tiến-task có thể bị triệt tiêu.
+
+Triệu chứng có thể tạo ra:
+
+- robot không đi đủ xa khỏi current/start;
+- robot drift về vùng trung tính/safe-like;
+- run lúc thành công lúc fail dù start/camera gần giống nhau;
+- action ngoài đời khác raw chunk offline.
+
+Bước kiểm chứng:
+
+- Log theo timestep:
+  - raw action chunk;
+  - aggregated action;
+  - action sau RTC;
+  - action thật gửi motor;
+  - current state sau execute.
+- Plot:
+  - `dist(raw_action, current_state)` vs `dist(executed_action, current_state)`
+  - `dist(raw_action, safe_pose)` vs `dist(executed_action, safe_pose)`
+  - chunk index/horizon thực sự được dùng.
+
+## 7. RTC chưa phải nguyên nhân trực tiếp, nhưng có thể khuếch đại lỗi
+
+**Mức độ nghi ngờ:** trung bình.
+
+Lý do:
+
+- RTC không tự biết safe pose.
+- RTC không nên tự kéo robot về safe pose.
+- Nhưng nếu raw/aggregated action đã conservative hoặc không nhất quán, RTC có thể giữ robot gần current state hơn.
+
+Bước kiểm chứng:
+
+- So raw policy action, aggregated action, action sau RTC.
+- Nếu raw action mạnh nhưng sau RTC yếu/kéo lại, nghi RTC/harness.
+- Nếu raw action đã yếu, RTC chỉ là yếu tố khuếch đại.
+
+## 8. Dataset tổng thể không lệch về safe pose
 
 **Mức độ nghi ngờ:** thấp nếu nói dataset toàn safe pose.
 
-Bằng chứng:
+Bằng chứng từ notebook cũ:
 
 - `mean_action_dist_safe` theo bucket vẫn quanh `185-188`.
 - First 50 episodes trong dataset mới gần như match old 50 episodes:
@@ -155,48 +264,44 @@ Bằng chứng:
 
 Kết luận:
 
-- Không thấy bằng chứng rằng việc fix/cut/upload dataset làm toàn bộ data bị kéo về safe pose.
-- Vấn đề hành vi new model nhiều khả năng nằm ở training/model output hơn là dataset tổng thể.
+- Không thấy bằng chứng dataset tổng thể bị kéo về safe pose.
+- Dataset vẫn có thể gây vấn đề theo phase/timing/style, nhưng không phải theo kiểu toàn dataset safe-biased.
 
-## 6. Distribution mới có thể làm model trung bình hóa hành vi nhiều hơn
+## 9. Dataset distribution / timing vẫn có thể làm model trung bình hóa
 
 **Mức độ nghi ngờ:** trung bình.
 
 Quan sát:
 
 - Dataset mở rộng từ 50 episodes lên 175-200 episodes.
-- Các bucket mới có một số khác biệt so với first50:
-  - mean speed thấp hơn một phần.
-  - action/state distribution thay đổi ở elbow/wrist.
-  - episode length và phase timing có thể khác.
+- Các bucket mới có distribution và timing khác first50.
+- New model có early action/chunk speed thấp hơn old.
 
-Vì sao đáng ngại:
+Nguy cơ:
 
-- Với imitation learning, nếu cùng observation/task nhưng có nhiều kiểu thao tác hoặc timing khác nhau, model có thể học trung bình hóa.
-- Trung bình hóa trong action space tuyệt đối dễ tạo ra "không đủ lực đi tiếp", đặc biệt ở các bước đầu episode.
+- Imitation learning với action tuyệt đối dễ bị trung bình hóa nếu cùng observation/task có nhiều style/timing.
+- Trung bình hóa có thể tạo hành vi under-active, đặc biệt ở phase approach.
 
 Bước kiểm chứng:
 
-- So sánh per-phase, không chỉ toàn episode:
-  - 0-2s đầu
-  - approach
-  - grasp/lift
-  - pour
-  - return/end
-- Tính action speed và distance-to-current-state theo phase.
-- Train ablation:
-  - chỉ first50 với config new
-  - first50 + file001
-  - first50 + file002
-  - full fixed dataset
+- Phân tích per-phase:
+  - start/approach;
+  - grasp/lift;
+  - pour;
+  - return.
+- Train ablation nếu cần:
+  - first50 với recipe mới;
+  - first50 + file001;
+  - first50 + file002;
+  - full dataset.
 
-## 7. Gripper collapse là tín hiệu phụ, không phải giải thích chính cho safe pose
+## 10. Gripper collapse là lỗi phụ, không giải thích safe drift
 
-**Mức độ nghi ngờ:** cao cho lỗi gripper, nhưng thấp nếu dùng nó để giải thích safe pose.
+**Mức độ nghi ngờ:** cao cho gripper, thấp cho safe drift.
 
-Quan sát:
+Bằng chứng:
 
-- New model gripper thấp hơn old rõ ở nhiều episode probe:
+- New model gripper thấp hơn old rõ ở nhiều episode:
   - ep50: new khoảng `1.63`, old khoảng `3.70`
   - ep120: new khoảng `1.15`, old khoảng `3.33`
   - ep145: new khoảng `1.47`, old khoảng `3.25`
@@ -204,92 +309,80 @@ Quan sát:
 Ý nghĩa:
 
 - Có thể giải thích lỗi "đi tới gần cốc nhưng không gắp được".
-- Không giải thích trực tiếp hiện tượng quay về gần safe pose.
+- Không giải thích trực tiếp hiện tượng đi dần về safe pose.
 
-Bước kiểm chứng:
-
-- Tách riêng metric gripper trong offline eval.
-- Không dùng gripper làm bằng chứng chính cho lỗi safe-pose.
-
-## 8. RTC nhiều khả năng không phải nguyên nhân trực tiếp
-
-**Mức độ nghi ngờ:** trung bình.
-
-Lý do:
-
-- RTC giới hạn/điều tiết action để tránh giật xa vị trí hiện tại.
-- RTC không tự biết safe pose và không nên tự kéo robot về safe pose.
-- Nếu policy output đã gần current state hoặc gần reset pose, RTC có thể làm hiện tượng "ì" rõ hơn, nhưng không phải nguồn gốc duy nhất.
-
-Bước kiểm chứng:
-
-- Chạy cùng recorded observation offline:
-  - raw policy action
-  - action sau aggregation
-  - action sau RTC nếu có log được
-- Nếu raw policy đã conservative, lỗi nằm trước RTC.
-- Nếu raw policy mạnh nhưng sau RTC bị kéo lại, mới nghi RTC/harness.
-
-## 9. Task string chưa phải nghi phạm chính
+## 11. Task string chưa phải nghi phạm chính
 
 **Mức độ nghi ngờ:** thấp.
 
-Quan sát:
+Notebook cũ so hai task string:
 
-- Notebook so cả hai task string:
-  - `Pour from orange cup into blue cup.`
-  - `Pour from orange cup to blue cup.`
-- Khác biệt output nhỏ, không đổi bản chất old/new.
+- `Pour from orange cup into blue cup.`
+- `Pour from orange cup to blue cup.`
 
-Kết luận:
+Khác biệt output nhỏ, không đổi bản chất old/new.
 
-- Sửa instruction có thể giúp rất ít, nhưng không phải nguyên nhân chính của lỗi hiện tại.
-
-## 10. Cần log inference thật để phân biệt các giả thuyết
+## 12. Cần recorded_obs và full runtime action trace
 
 **Mức độ ưu tiên:** rất cao.
 
-Notebook hiện dùng frame từ dataset để probe offline. Điều này tốt để so old/new, nhưng chưa thay thế được log ngoài đời.
+Notebook mới đã cho thấy dataset-frame offline chưa đủ để giải thích lỗi ngoài đời. Bước tiếp theo phải lấy runtime log thật.
 
-Cần lưu cho mỗi lần infer fail:
+Cần log mỗi inference step:
 
-- Observation state theo timestep.
-- Raw policy action chunk.
-- Action sau aggregation.
-- Action sau RTC nếu có.
-- Current joint state thực tế sau khi execute.
-- Ảnh camera tại các timestep chính.
+- timestamp;
+- camera frame hoặc path;
+- `current_state`;
+- `start_pose`;
+- `safe_pose`;
+- raw policy chunk;
+- aggregated action;
+- RTC/action sau safety layer;
+- command gửi motor;
+- current state sau execute;
+- queue/chunk index đang execute.
 
-Các plot cần có:
+Plot bắt buộc:
 
-- `dist(raw_action_t0, current_state)`
-- `dist(raw_action_t0, safe_pose)`
+- `dist(current_state, start_pose)`
 - `dist(current_state, safe_pose)`
-- joint trajectory actual vs commanded.
-- action norm/speed theo timestep.
+- `dist(raw_action, current_state)`
+- `dist(raw_action, safe_pose)`
+- `dist(executed_action, current_state)`
+- `dist(executed_action, safe_pose)`
+- actual-vs-commanded tracking error
 
 Kết luận mong muốn:
 
-- Nếu raw action gần current state: model under-active.
-- Nếu raw action xa current nhưng command sau RTC gần current: RTC/harness can thiệp quá mạnh.
-- Nếu raw action kéo về safe ngay cả khi current xa safe: safe-pose attractor thật.
+- Raw action đã về safe: model/runtime observation gây safe-pose attractor.
+- Raw action không về safe nhưng executed action về safe: aggregation/RTC/queue/controller.
+- Current state về safe dù command không về safe: robot dynamics/controller/tracking.
+- Raw action chỉ gần current liên tục: under-active/receding-horizon issue.
 
 ## Kết luận hiện tại
 
-Nghi vấn mạnh nhất không phải "model học safe pose" mà là:
+Nghi vấn mạnh nhất sau notebook mới:
 
-1. New model bị conservative / under-active so với old.
-2. Start/reset pose gần safe pose nên biểu hiện ngoài đời giống "về safe pose".
-3. Config old/new không khớp (`chunk_size` và `n_action_steps` khác nhau), cần retrain/so lại với config kiểm soát.
-4. Dataset tổng thể không có dấu hiệu bị kéo về safe pose, nhưng distribution/timing của data mới có thể làm model trung bình hóa hành vi.
-5. Gripper collapse là lỗi phụ rõ ràng, có thể giải thích fail gắp cốc, nhưng không phải bằng chứng chính cho safe-pose.
+1. New model có **under-active / stay-current bias** trong early action.
+2. Safe-pose attractor trong raw policy **chưa được chứng minh**.
+3. Raw multi-mode stochastic behavior trên dataset-frame **chưa được chứng minh mạnh**.
+4. Overshoot trong raw offline **không xuất hiện theo threshold hiện tại**.
+5. Horizon `35` của new model **không còn là nghi phạm chính**, vì phù hợp autocorrelation khoảng `37`.
+6. Lỗi ngoài đời nhiều khả năng nằm ở **closed-loop runtime**, đặc biệt aggregation/queue/receding horizon/RTC hoặc observation drift.
+7. Cần `recorded_obs` + full action trace trước khi quyết định train lại hay sửa runtime.
 
-## Lệnh/việc nên làm tiếp
+## Việc nên làm tiếp
 
-1. Tạo offline analyzer cho `recorded_obs` từ các lần infer fail.
-2. Retrain một bản control dùng cùng horizon với old:
-   - `chunk_size=30`
-   - `n_action_steps=30`
-3. So lại old/new/control bằng cùng notebook.
-4. Thêm check tự động sau train để xác nhận config thực tế không bị ghi đè.
-5. Nếu control vẫn under-active, làm ablation dataset theo bucket để tìm nhóm episode làm model co hành vi.
+1. Thêm full runtime logger.
+2. Replay `recorded_obs` của run success và fail bằng notebook/offline analyzer.
+3. Log và so:
+   - raw policy chunk;
+   - aggregated action;
+   - action sau RTC;
+   - command thật;
+   - current state thật.
+4. Sau khi xác định tầng lỗi:
+   - nếu raw fail: quay lại model/data/retrain;
+   - nếu aggregation/RTC fail: sửa runtime harness;
+   - nếu command/tracking fail: sửa controller/latency/action queue.
+5. Chỉ train lại sau khi có bằng chứng raw model là nguồn lỗi chính.

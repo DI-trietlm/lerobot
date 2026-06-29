@@ -311,6 +311,10 @@ class RTCXVLAControlGUI(tk.Tk):
                     "record_obs_enable", "Record Observations", "false", "bool", ("true", "false")
                 ),
                 _FieldSpec("record_obs_dir", "Record Output Directory", "recorded_obs", "str"),
+                _FieldSpec(
+                    "record_action_enable", "Record Actions", "false", "bool", ("true", "false")
+                ),
+                _FieldSpec("record_action_dir", "Action Trace Directory", "recorded_obs", "str"),
             ],
             "Attention Capture (Server-side, X-VLA only)": [
                 _FieldSpec(
@@ -608,6 +612,8 @@ class RTCXVLAControlGUI(tk.Tk):
             xvla_domain_id=self._parse_optional_int("xvla_domain_id"),
             record_obs_enable=self._parse_bool("record_obs_enable"),
             record_obs_dir=self._vars["record_obs_dir"].get().strip() or "recorded_obs",
+            record_action_enable=self._parse_bool("record_action_enable"),
+            record_action_dir=self._vars["record_action_dir"].get().strip() or "recorded_obs",
             capture_attn_enable=self._parse_bool("capture_attn_enable"),
             capture_attn_dir=self._vars["capture_attn_dir"].get().strip() or "attention_captures",
         )
@@ -650,6 +656,8 @@ class RTCXVLAControlGUI(tk.Tk):
             "debug_visualize_queue_size": cfg.debug_visualize_queue_size,
             "record_obs_enable": cfg.record_obs_enable,
             "record_obs_dir": cfg.record_obs_dir,
+            "record_action_enable": cfg.record_action_enable,
+            "record_action_dir": cfg.record_action_dir,
             "capture_attn_enable": cfg.capture_attn_enable,
             "capture_attn_dir": cfg.capture_attn_dir,
         }

@@ -57,6 +57,7 @@ from lerobot.types import PolicyAction
 from .configs import PolicyServerConfig
 from .constants import SUPPORTED_POLICIES
 from .helpers import (
+    AsyncJsonlWriter,
     FPSTracker,
     Observation,
     RemotePolicyConfig,
@@ -66,6 +67,7 @@ from .helpers import (
     get_logger,
     observations_similar,
     raw_observation_to_observation,
+    to_jsonable,
 )
 
 
@@ -165,6 +167,11 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         self.capture_attn_dir = "attention_captures"
         self._attn_timestep = 0
 
+        # Lightweight action traces (optional). Full raw/postprocessed tensors stay server-side.
+        self.record_action_enable = False
+        self.record_action_dir = "recorded_obs"
+        self._action_trace_writer: AsyncJsonlWriter | None = None
+
         # RTC state (optional)
         self.rtc_enabled = False
         self.rtc_inference_delay_steps: int | None = None
@@ -248,6 +255,34 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
             self._last_obs_receive_perf = None
             self._obs_receive_seq = 0
 
+    def _setup_action_recording(self, record_dir: str) -> None:
+        root = Path(record_dir)
+        root.mkdir(parents=True, exist_ok=True)
+        self._close_action_recording()
+        trace_path = root / "server_actions.jsonl"
+        self._action_trace_writer = AsyncJsonlWriter(trace_path)
+        self.logger.info(f"Server action tracing enabled → {trace_path.resolve()}")
+
+    def _close_action_recording(self) -> None:
+        if self._action_trace_writer is None:
+            return
+        trace_path = self._action_trace_writer.file_path
+        self._action_trace_writer.close()
+        self.logger.info(f"Server action tracing stopped. Data saved to: {trace_path.resolve()}")
+        self._action_trace_writer = None
+
+    def _record_action_event(self, event: str, payload: dict[str, Any]) -> None:
+        if self._action_trace_writer is None:
+            return
+        self._action_trace_writer.write(
+            {
+                "event": event,
+                "wall_time_s": time.time(),
+                "perf_time_s": time.perf_counter(),
+                **payload,
+            }
+        )
+
     @staticmethod
     def _delta_ms(end_perf: float, start_perf: float | None) -> float:
         if start_perf is None:
@@ -306,6 +341,12 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         self.rtc_inference_delay_steps = getattr(policy_specs, "inference_delay_steps", None)
         self.image_compress_enable = bool(getattr(policy_specs, "image_compress_enable", False))
         self.image_compress_quality = int(getattr(policy_specs, "image_compress_quality", 90))
+        self.record_action_enable = bool(getattr(policy_specs, "record_action_enable", False))
+        self.record_action_dir = str(getattr(policy_specs, "record_action_dir", "recorded_obs"))
+        if self.record_action_enable:
+            self._setup_action_recording(self.record_action_dir)
+        else:
+            self._close_action_recording()
         self.capture_attn_enable = bool(getattr(policy_specs, "capture_attn_enable", False))
         self.capture_attn_dir = str(getattr(policy_specs, "capture_attn_dir", "attention_captures"))
         self._attn_timestep = 0
@@ -669,13 +710,24 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
 
         return False
 
-    def _time_action_chunk(self, t_0: float, action_chunk: list[torch.Tensor], i_0: int) -> list[TimedAction]:
+    def _time_action_chunk(
+        self,
+        t_0: float,
+        action_chunk: list[torch.Tensor],
+        i_0: int,
+        action_metas: list[dict[str, Any]] | None = None,
+    ) -> list[TimedAction]:
         """Turn a chunk of actions into a list of TimedAction instances,
         with the first action corresponding to t_0 and the rest corresponding to
         t_0 + i*environment_dt for i in range(len(action_chunk))
         """
         return [
-            TimedAction(timestamp=t_0 + i * self.config.environment_dt, timestep=i_0 + i, action=action)
+            TimedAction(
+                timestamp=t_0 + i * self.config.environment_dt,
+                timestep=i_0 + i,
+                action=action,
+                meta=action_metas[i] if action_metas is not None and i < len(action_metas) else {},
+            )
             for i, action in enumerate(action_chunk)
         ]
 
@@ -896,8 +948,11 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         processed_action_tensor = torch.stack(processed_actions, dim=1).squeeze(0).detach().cpu()
         self.logger.debug(f"Postprocessed action shape: {processed_action_tensor.shape}")
 
+        rtc_real_delay = None
+        rtc_action_index_before_inference = self._rtc_action_index_before_inference
         if self.rtc_enabled and self.rtc_action_queue is not None:
             real_delay = max(0, math.ceil(inference_time / self.config.environment_dt))
+            rtc_real_delay = real_delay
             self._rtc_advance_steps(real_delay)
             self.rtc_action_queue.merge(
                 original_actions=raw_action_tensor.squeeze(0).detach().cpu(),
@@ -913,11 +968,45 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
             action_tensor = processed_action_tensor
 
         """5. Convert to TimedAction list"""
+        action_metas = [
+            {
+                "server_obs_timestep": observation_t.get_timestep(),
+                "server_chunk_index": i,
+                "server_chunk_size": len(action_tensor),
+                "rtc_enabled": self.rtc_enabled,
+                "rtc_real_delay": rtc_real_delay,
+                "rtc_action_index_before_inference": rtc_action_index_before_inference,
+            }
+            for i in range(len(action_tensor))
+        ]
         action_chunk = self._time_action_chunk(
-            observation_t.get_timestamp(), list(action_tensor), observation_t.get_timestep()
+            observation_t.get_timestamp(),
+            list(action_tensor),
+            observation_t.get_timestep(),
+            action_metas=action_metas,
         )
         postprocess_stops = time.perf_counter()
         postprocessing_time = postprocess_stops - start_postprocess
+
+        self._record_action_event(
+            "chunk_generated",
+            {
+                "obs_timestep": observation_t.get_timestep(),
+                "obs_timestamp": observation_t.get_timestamp(),
+                "sent_timesteps": [action.get_timestep() for action in action_chunk],
+                "prepare_ms": prepare_time * 1000,
+                "preprocess_ms": preprocessing_time * 1000,
+                "inference_ms": inference_time * 1000,
+                "postprocess_ms": postprocessing_time * 1000,
+                "total_ms": (postprocess_stops - start_prepare) * 1000,
+                "rtc_enabled": self.rtc_enabled,
+                "rtc_real_delay": rtc_real_delay,
+                "rtc_action_index_before_inference": rtc_action_index_before_inference,
+                "raw_action_norm": to_jsonable(raw_action_tensor.squeeze(0).detach().cpu()),
+                "postprocessed_action": to_jsonable(processed_action_tensor),
+                "sent_action": to_jsonable(action_tensor),
+            },
+        )
 
         self.logger.info(
             f"Observation {observation_t.get_timestep()} | "
@@ -938,6 +1027,7 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
     def stop(self):
         """Stop the server"""
         self._reset_server()
+        self._close_action_recording()
         self._audit_interarrival.close()
         self._audit_queue_latency.close()
         self.logger.info("Server stopping...")

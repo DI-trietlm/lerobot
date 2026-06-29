@@ -62,6 +62,8 @@
   "debug_visualize_queue_size": true,
   "record_obs_enable": false,
   "record_obs_dir": "recorded_obs-0611",
+  "record_action_enable": true,
+  "record_action_dir": "recorded_obs-0611",
   "capture_attn_enable": false,
   "capture_attn_dir": "attention_captures"
 }

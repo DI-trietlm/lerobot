@@ -215,6 +215,14 @@ class RobotClientConfig:
         default="recorded_obs",
         metadata={"help": "Directory to save recorded observation images and metadata"},
     )
+    record_action_enable: bool = field(
+        default=False,
+        metadata={"help": "Save lightweight structured action traces during inference"},
+    )
+    record_action_dir: str = field(
+        default="recorded_obs",
+        metadata={"help": "Directory to save action trace JSONL files"},
+    )
 
     # Attention capture configuration (server-side)
     capture_attn_enable: bool = field(

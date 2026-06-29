@@ -15,9 +15,12 @@
 import logging
 import logging.handlers
 import os
+import json
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from queue import Empty, Queue
 from typing import Any
 
 import numpy as np
@@ -54,6 +57,69 @@ Observation = dict[str, torch.Tensor]
 TRANSPORT_META_KEY = "__lerobot_transport_meta__"
 JPEG_ENCODING_TAG = "jpeg"
 JPEG_ENCODED_FRAME_KEY = "__lerobot_jpeg_frame__"
+
+
+def to_jsonable(value: Any) -> Any:
+    """Convert small tensors/arrays/scalars to JSON-serializable values for runtime traces."""
+    if isinstance(value, torch.Tensor):
+        value = value.detach().cpu()
+        if value.ndim == 0:
+            return value.item()
+        return value.tolist()
+    if isinstance(value, np.ndarray):
+        if value.ndim == 0:
+            return value.item()
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {str(k): to_jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [to_jsonable(v) for v in value]
+    return value
+
+
+class AsyncJsonlWriter:
+    """Append JSONL records from a background thread to keep control paths light."""
+
+    def __init__(self, file_path: Path, flush_interval_s: float = 1.0):
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.file_path = file_path
+        self._file = file_path.open("a", encoding="utf-8")
+        self._flush_interval_s = max(0.1, flush_interval_s)
+        self._queue: Queue[dict[str, Any] | None] = Queue()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        pending = 0
+        while True:
+            try:
+                item = self._queue.get(timeout=self._flush_interval_s)
+            except Empty:
+                if pending:
+                    self._file.flush()
+                    pending = 0
+                continue
+
+            if item is None:
+                break
+
+            self._file.write(json.dumps(to_jsonable(item), separators=(",", ":")) + "\n")
+            pending += 1
+            self._queue.task_done()
+
+        if pending:
+            self._file.flush()
+
+    def write(self, item: dict[str, Any]) -> None:
+        self._queue.put(item)
+
+    def close(self, timeout: float = 5.0) -> None:
+        self._queue.put(None)
+        self._thread.join(timeout=timeout)
+        self._file.flush()
+        self._file.close()
 
 
 def visualize_action_queue_size(action_queue_size: list[int]) -> None:
@@ -400,9 +466,13 @@ class TimedData:
 @dataclass
 class TimedAction(TimedData):
     action: Action
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def get_action(self):
         return self.action
+
+    def get_meta(self):
+        return self.meta
 
 
 @dataclass
@@ -460,6 +530,8 @@ class RemotePolicyConfig:
     xvla_domain_id: int | None = None
     image_compress_enable: bool = False
     image_compress_quality: int = 90
+    record_action_enable: bool = False
+    record_action_dir: str = "recorded_obs"
     capture_attn_enable: bool = False
     capture_attn_dir: str = "attention_captures"
 

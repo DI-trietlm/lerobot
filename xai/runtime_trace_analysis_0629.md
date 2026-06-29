@@ -692,3 +692,145 @@ Vì vậy nghi phạm quan trọng hiện tại không còn là RTC, mà là m�
 4. Sau khi replay đúng pipeline, nếu vẫn lệch server thì mới xét tiếp khác biệt transport/JPEG/state serialization.
 
 Bước tiếp theo nên là replay offline trên chính `recorded_obs-0629-nonrtc`, không phải hai run cũ, rồi so `postprocessed_action` offline với `server_actions.jsonl` cùng timestep.
+
+## 16. Cập nhật sau notebook replay đã sửa pipeline
+
+Notebook `xai/offline_replay_recorded_obs_0629.ipynb` đã được sửa để dùng đúng path giống server:
+
+```text
+raw_observation_to_observation()
+```
+
+thay vì gọi trực tiếp `prepare_raw_observation()`. Sau khi rerun, notebook xuất:
+
+- `ablation_predictions.csv`: `12,160` rows, `0` errors.
+- `ablation_summary.csv`: `608` rows.
+- `server_replay_compare.csv`: `184` rows.
+- 8 plot ablation cho 4 run x 2 image variants.
+
+Các run đã replay:
+
+- `recorded_obs-0629-01`
+- `recorded_obs-0629-02`
+- `recorded_obs-0629-nonrtc`
+- `recorded_obs-0629-rtc2`
+
+Các image variants:
+
+- `saved_rgb`
+- `server_jpeg_bgr_q90`
+
+`server_jpeg_bgr_q90` mô phỏng đường online hiện tại: ảnh RGB được encode JPEG quality 90 rồi decode bằng OpenCV, tức mảng trả về có thứ tự BGR.
+
+### 16.1 Offline replay đã tái hiện được hướng safe-pull của server
+
+So sánh `server_actions.jsonl` với offline replay trên cùng observation/timestep:
+
+| run | RTC | image variant | n | server safe-pull | offline safe-pull | mean abs delta p_end |
+|---|---:|---|---:|---:|---:|---:|
+| `recorded_obs-0629-01` | true | `saved_rgb` | 20 | 10 | 8 | 0.128 |
+| `recorded_obs-0629-01` | true | `server_jpeg_bgr_q90` | 20 | 10 | 8 | 0.161 |
+| `recorded_obs-0629-02` | true | `saved_rgb` | 21 | 3 | 2 | 0.095 |
+| `recorded_obs-0629-02` | true | `server_jpeg_bgr_q90` | 21 | 3 | 2 | 0.089 |
+| `recorded_obs-0629-nonrtc` | false | `saved_rgb` | 18 | 7 | 5 | 0.080 |
+| `recorded_obs-0629-nonrtc` | false | `server_jpeg_bgr_q90` | 18 | 7 | 5 | 0.088 |
+| `recorded_obs-0629-rtc2` | true | `saved_rgb` | 18 | 9 | 7 | 0.093 |
+| `recorded_obs-0629-rtc2` | true | `server_jpeg_bgr_q90` | 18 | 9 | 7 | 0.094 |
+
+Kết luận: notebook cũ sai pipeline, nhưng notebook mới đã tái hiện được pattern chính. Lỗi safe-drift không phải artifact riêng của server runtime; offline policy forward trên recorded obs cũng tạo hướng kéo về safe ở nhiều điểm.
+
+Một số mismatch lớn vẫn còn:
+
+| run | obs | current p | server p_end | offline p_end | note |
+|---|---:|---:|---:|---:|---|
+| `recorded_obs-0629-01` | 134 | 0.444 | 0.934 | 0.276 | server kéo safe, offline không |
+| `recorded_obs-0629-01` | 66 | 0.119 | 0.810 | 0.350 | cùng hướng nhưng offline yếu hơn |
+| `recorded_obs-0629-02` | 120 | 0.864 | 0.449 | 0.767 | server đi ngược khỏi safe mạnh hơn |
+| `recorded_obs-0629-rtc2` | 32 | 0.403 | 0.866 | 0.589 | cùng hướng nhưng offline yếu hơn |
+
+Vì vậy offline replay hiện đủ tốt để chẩn đoán hướng lỗi, nhưng chưa phải bit-exact với server. Các khác biệt còn lại có thể đến từ processor stateful/context, sampling seed, hoặc chi tiết dtype/device, nhưng không đảo ngược kết luận chính.
+
+### 16.2 JPEG/BGR không giải thích safe-drift
+
+Nếu lỗi do màu ảnh/JPEG transport, `server_jpeg_bgr_q90` phải đổi pattern lớn so với `saved_rgb`. Kết quả không như vậy:
+
+- `recorded_obs-0629-nonrtc`: safe-pull offline vẫn `5/18` ở cả hai variants.
+- `recorded_obs-0629-rtc2`: safe-pull offline vẫn `7/18` ở cả hai variants.
+- Mean abs delta với server chỉ dao động nhỏ, không có dấu hiệu BGR/JPEG là nguyên nhân chính.
+
+Kết luận: nên coi RGB/BGR/JPEG là rủi ro phụ cần clean sau, không phải lời giải thích cho hiện tượng safe pose.
+
+### 16.3 Ablation chỉ ra state là tín hiệu chi phối
+
+Notebook chạy 4 ablations:
+
+- `current_image_current_state`
+- `current_image_start_state`
+- `start_image_current_state`
+- `start_image_start_state`
+
+Kết quả tổng hợp `saved_rgb`:
+
+| run | ablation | n obs | mean p_end-current_p | safe-pull count |
+|---|---|---:|---:|---:|
+| `recorded_obs-0629-nonrtc` | `current_image_current_state` | 18 | -0.004 | 5 |
+| `recorded_obs-0629-nonrtc` | `current_image_start_state` | 18 | -0.648 | 1 |
+| `recorded_obs-0629-nonrtc` | `start_image_current_state` | 18 | +0.134 | 6 |
+| `recorded_obs-0629-nonrtc` | `start_image_start_state` | 18 | -0.554 | 1 |
+| `recorded_obs-0629-rtc2` | `current_image_current_state` | 17 | +0.035 | 6 |
+| `recorded_obs-0629-rtc2` | `current_image_start_state` | 17 | -0.654 | 1 |
+| `recorded_obs-0629-rtc2` | `start_image_current_state` | 17 | +0.204 | 13 |
+| `recorded_obs-0629-rtc2` | `start_image_start_state` | 17 | -0.529 | 1 |
+
+Pattern quan trọng:
+
+```text
+giữ current_state, dù dùng start_image
+    -> vẫn kéo mạnh về safe
+
+giữ start_state, dù dùng current_image
+    -> gần như không kéo safe
+```
+
+Nói cách khác, safe-drift hiện tại chủ yếu đi qua nhánh state/closed-loop state distribution, không phải do ảnh nhìn thấy cốc hay không. Ảnh hiện tại có thể làm yếu/mạnh hướng kéo, nhưng state là biến quyết định.
+
+### 16.4 Safe-drift xảy ra sớm rồi tự duy trì
+
+Trong `recorded_obs-0629-nonrtc` với `current_image_current_state`:
+
+| obs | elapsed s | current p | offline p_end | delta |
+|---:|---:|---:|---:|---:|
+| 0 | 0.000 | 0.000 | 0.140 | +0.140 |
+| 17 | 1.849 | 0.206 | 0.702 | +0.495 |
+| 19 | 2.005 | 0.171 | 0.511 | +0.340 |
+| 38 | 3.362 | 0.224 | 0.846 | +0.622 |
+| 57 | 4.638 | 0.596 | 0.685 | +0.089 |
+
+Sau khi robot đã gần safe (`p ~ 0.8-0.9`), nhiều chunk không còn tiếp tục tăng p, nhưng lúc đó robot đã bị đưa vào vùng safe rồi. Đây khớp với quan sát live: nó không cần "bật công tắc safe"; chỉ cần vài chunk đầu kéo sai đủ mạnh, sau đó closed-loop rơi vào basin gần safe/rest.
+
+### 16.5 Kết luận hiện tại
+
+Kết luận cập nhật:
+
+```text
+safe drift là hành vi của raw/base SmolVLA policy trên live recorded obs,
+đặc biệt khi state hiện tại rơi vào một vùng mà model dự đoán trajectory tiến về safe/rest.
+
+RTC không phải nguyên nhân chính.
+Client aggregation không phải nguyên nhân chính.
+JPEG/BGR không phải nguyên nhân chính.
+Robot/controller tự trôi không phải nguyên nhân chính.
+```
+
+Nghi phạm còn lại có trọng lượng cao nhất:
+
+1. Dataset/model học một shortcut state -> safe/rest, có thể do phân phối state trong dataset sau cắt/nối/train.
+2. Closed-loop compounding: vài action đầu hơi lệch về safe, state mới lại làm model càng chọn mode safe hơn.
+3. Model mới trên 200 eps/150K steps có thể đã học basin này mạnh hơn model 50 eps, nhưng notebook hiện tại **chưa so trực tiếp checkpoint old vs new**, nên chưa kết luận được vì sao old có vẻ ổn hơn.
+
+Việc cần làm tiếp theo:
+
+1. Chạy cùng notebook/replay với old checkpoint `05ac253...` và new checkpoint `420c66a...` trên cùng 4 run để đo khác biệt safe-pull.
+2. Tạo counterfactual state scan: giữ ảnh start/live cố định, quét state dọc đoạn start -> safe để tìm ngưỡng p nơi model bắt đầu kéo safe.
+3. Kiểm tra dataset train quanh vùng state đó: episode nào có state gần start nhưng action/trajectory đi safe/rest.
+4. Nếu train lại: thêm eval offline theo safe-pull metric này, không chỉ train loss.

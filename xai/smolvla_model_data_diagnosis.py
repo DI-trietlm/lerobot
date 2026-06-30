@@ -754,6 +754,14 @@ def write_eval_report(
     config_diff: pd.DataFrame | None = None,
     file_diff: pd.DataFrame | None = None,
 ) -> str:
+    def table(df: pd.DataFrame, max_rows: int | None = None) -> str:
+        if max_rows is not None:
+            df = df.head(max_rows)
+        if df.empty:
+            return "_empty_"
+        # Avoid pandas.to_markdown because the server environment may not have tabulate installed.
+        return "```text\n" + df.to_string(index=False) + "\n```"
+
     lines = [
         "# SmolVLA Offline Model/Data Diagnosis Report",
         "",
@@ -766,17 +774,17 @@ def write_eval_report(
         "## A. Replay Summary (`current_image_current_state`, `saved_rgb`)",
     ]
     if run_policy_agg is not None and not run_policy_agg.empty:
-        lines.append(run_policy_agg.to_markdown(index=False))
+        lines.append(table(run_policy_agg))
     else:
         lines.append("_No replay summary available._")
     lines += ["", "## B. State Scan Danger Points"]
     if danger is not None and not danger.empty:
-        lines.append(danger.to_markdown(index=False))
+        lines.append(table(danger))
     else:
         lines.append("_No state-scan danger points found or section not run._")
     lines += ["", "## C. Top Dataset Episode Suspects"]
     if suspects is not None and not suspects.empty:
-        lines.append(suspects.head(30).to_markdown(index=False))
+        lines.append(table(suspects, max_rows=30))
     else:
         lines.append("_No dataset audit available._")
     lines += ["", "## D. Config/File Diff"]
@@ -797,7 +805,7 @@ def write_eval_report(
             .reset_index()
         )
         score.to_csv(cfg.output_dir / "E_policy_score.csv", index=False)
-        lines += ["", "## E. Policy Score", score.to_markdown(index=False)]
+        lines += ["", "## E. Policy Score", table(score)]
     text = "\n".join(lines)
     (cfg.output_dir / "E_offline_eval_report.md").write_text(text, encoding="utf-8")
     return text

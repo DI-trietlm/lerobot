@@ -65,7 +65,7 @@ class DiagnosisConfig:
         if not self.repo_root.exists():
             self.repo_root = Path.cwd()
         if self.output_dir is None:
-            self.output_dir = self.repo_root / "xai" / "model_data_diagnosis_smolvla_0629_outputs"
+            self.output_dir = self.repo_root / "xai" / "artifacts" / "model_data_diagnosis_smolvla_0629_outputs"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         if self.dataset_root is None:
             self.dataset_root = Path(
@@ -89,7 +89,7 @@ class DiagnosisConfig:
 
     @property
     def safe_pose_path(self) -> Path:
-        return self.repo_root / "safe_pose.json"
+        return self.repo_root / "runtime_configs" / "safe_pose.json"
 
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:

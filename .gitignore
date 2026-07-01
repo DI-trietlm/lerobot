@@ -196,3 +196,5 @@ xai/**/*.log
 xai/**/*manifest*.csv
 xai/**/*summary*.json
 xai/**/__pycache__/
+xai/**/outputs/
+xai/artifacts/

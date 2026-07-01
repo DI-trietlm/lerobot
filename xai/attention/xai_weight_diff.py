@@ -314,7 +314,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--output_dir",
         default=None,
-        help="Directory for plots (default: xai/outputs)",
+        help="Directory for plots (default: xai/artifacts/attention_outputs)",
     )
     p.add_argument(
         "--dry-run",

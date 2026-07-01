@@ -28,12 +28,12 @@ that run is longer than --min-cut-s, and never cut below --keep-min-s of the epi
 
 Usage:
     # preview only (no writing, no video deps):
-    uv run python xai/cut_trailing_idle.py \
+    uv run python xai/scripts/cut_trailing_idle.py \
         --repo-id di-techinnova/so-arm-101-pouring-0.2 \
         --root /path/to/local/dataset \
         --dry-run
     # actually write the trimmed dataset:
-    uv run python xai/cut_trailing_idle.py \
+    uv run python xai/scripts/cut_trailing_idle.py \
         --repo-id di-techinnova/so-arm-101-pouring-0.2 \
         --output-repo-id di-techinnova/so-arm-101-pouring-0.2-trimmed
 """

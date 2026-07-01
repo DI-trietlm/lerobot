@@ -294,7 +294,10 @@ def main() -> None:
     (out_root / "meta" / "stats.json").write_text(json.dumps(stats, indent=4), encoding="utf-8")
 
     manifest["cut_seconds"] = manifest["n_cut"] / fps
-    manifest.to_csv(Path("xai") / f"safe_pose_cut_manifest_{args.output_reppo_id if False else args.output_repo_id.split('/')[-1]}.csv", index=False)
+    manifest.to_csv(
+        Path("xai") / "artifacts" / f"safe_pose_cut_manifest_{args.output_reppo_id if False else args.output_repo_id.split('/')[-1]}.csv",
+        index=False,
+    )
     print(f"done: {out_root}")
 
 

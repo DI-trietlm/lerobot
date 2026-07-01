@@ -149,7 +149,7 @@ def save_visualizations(
     n_img: int,
     args: argparse.Namespace,
 ) -> None:
-    """Saves 4 visualization outputs to xai/outputs/."""
+    """Saves 4 visualization outputs to xai/artifacts/attention_outputs/."""
     import cv2
     import matplotlib.pyplot as plt
     import numpy as np
@@ -304,7 +304,7 @@ def main(args: argparse.Namespace) -> None:
     print("=" * 60)
     print(f"  Attention entropy (normalized): {norm_entropy:.3f}")
     print(f"  Total time: {elapsed:.2f}s")
-    print(f"  Outputs: xai/outputs/")
+    print(f"  Outputs: xai/artifacts/attention_outputs/")
     print("=" * 60)
 
 

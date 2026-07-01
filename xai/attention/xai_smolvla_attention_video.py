@@ -35,7 +35,7 @@ Usage
     # smoke test: load model, map cameras, show token boundaries, then exit
     python3 xai_smolvla_attention_video.py --obs-dir ../recorded_obs-05-06-03 --dry-run
 
-    # full run (two videos written to xai/outputs/)
+    # full run (two videos written to xai/artifacts/attention_outputs/)
     python3 xai_smolvla_attention_video.py \
         --obs-dir ../recorded_obs-05-06-03 \
         --model di-techinnova/smolvla-pick-cup-0.2 \
@@ -74,7 +74,7 @@ from lerobot.utils.constants import (  # noqa: E402
     OBS_STATE,
 )
 
-OUTPUT_DIR = _HERE / "outputs"
+OUTPUT_DIR = _HERE.parent / "artifacts" / "attention_outputs"
 
 
 # --------------------------------------------------------------------------- #

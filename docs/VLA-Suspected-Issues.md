@@ -1,6 +1,6 @@
 # VLA Suspected Issues
 
-Tài liệu này tổng hợp các nghi vấn hiện tại quanh pipeline record -> cut -> train -> infer cho SO-ARM pouring task, đã cập nhật theo notebook mới nhất `xai/offline_action_mode_probe_smolvla.ipynb`.
+Tài liệu này tổng hợp các nghi vấn hiện tại quanh pipeline record -> cut -> train -> infer cho SO-ARM pouring task, đã cập nhật theo notebook mới nhất `xai/notebooks/offline_action_mode_probe_smolvla.ipynb`.
 
 Mục tiêu: tách rõ điều đã có bằng chứng, điều notebook đã làm yếu đi, và điều cần log ở runtime để kết luận.
 
@@ -10,8 +10,8 @@ Mục tiêu: tách rõ điều đã có bằng chứng, điều notebook đã l�
 - Dataset chính: `di-techinnova/so-arm-101-pouring-0.3-cutted`
 - Model old: train khoảng 50 episodes / khoảng 18K steps, ngoài đời có vẻ ổn hơn.
 - Model new: train khoảng 175-200 episodes / nhiều steps hơn, ngoài đời có run thành công, run đi lệch/quá cốc, và run đi dần về gần safe pose.
-- Notebook cũ: `xai/offline_compare_smolvla_old_new.ipynb`
-- Notebook mới: `xai/offline_action_mode_probe_smolvla.ipynb`
+- Notebook cũ: `xai/notebooks/offline_compare_smolvla_old_new.ipynb`
+- Notebook mới: `xai/notebooks/offline_action_mode_probe_smolvla.ipynb`
 - Output notebook mới đã đọc: 36 outputs, 10 ảnh, 10 bảng, 0 error.
 
 ## Kết luận cập nhật

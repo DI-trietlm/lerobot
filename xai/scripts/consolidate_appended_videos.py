@@ -13,7 +13,7 @@ from lerobot.datasets.video_utils import concatenate_video_files, get_video_dura
 
 
 ROOT = Path(r"F:\llms\hf\models\lerobot\di-techinnova\so-arm-101-pouring-0.3-cutted")
-BACKUP = Path("xai/consolidate_appended_videos_backup")
+BACKUP = Path("xai/artifacts/consolidate_appended_videos_backup")
 START_EPISODE = 50
 END_EPISODE = 120
 FPS = 15

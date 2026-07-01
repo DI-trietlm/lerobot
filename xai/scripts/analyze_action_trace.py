@@ -15,7 +15,7 @@ It answers the deploy debugging questions we care about:
 - Did the executed/current state move toward a supplied safe pose?
 
 Example:
-    uv run python xai/analyze_action_trace.py --trace-dir recorded_obs-0611 \
+    uv run python xai/scripts/analyze_action_trace.py --trace-dir recorded_obs-0611 \
         --safe-pose "0,0,0,0,0,0" --plot
 """
 

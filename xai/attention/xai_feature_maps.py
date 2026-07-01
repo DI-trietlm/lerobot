@@ -15,7 +15,7 @@ DaViT spatial resolution pipeline:
 Usage (on Linux server from xai/ directory):
     python3 xai_feature_maps.py [--image PATH] [--alpha 0.6] [--cmap turbo]
 
-Outputs (in xai/outputs/):
+Outputs (in xai/artifacts/attention_outputs/):
     feature_maps_grid.png        — 2×5 grid: original + 4 stages (raw + overlay)
     feature_maps_combined.png    — average heatmap across all stages, overlaid
     feature_maps_stage{0-3}.png  — individual per-stage overlays
@@ -523,7 +523,7 @@ def main() -> int:
     save_individual_stages(pil_orig, maps, out_dir, args.alpha, args.cmap)
 
     print("\n" + "=" * 60)
-    print("DONE — Feature maps saved to xai/outputs/")
+    print("DONE — Feature maps saved to xai/artifacts/attention_outputs/")
     print("Files generated:")
     print("  feature_maps_grid.png      — full 2×5 grid (raw + overlay)")
     print("  feature_maps_combined.png  — averaged across all stages")

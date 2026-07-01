@@ -50,7 +50,7 @@ LEGACY_MODEL_DIR = os.environ.get(
     os.path.join(PROJECT_DIR, "xvla-pouring-0.1"),
 )
 
-OUTPUT_DIR = os.path.join(UTILS_DIR, "outputs")
+OUTPUT_DIR = os.path.join(PROJECT_DIR, "artifacts", "attention_outputs")
 PACKAGE_NAME = "xvla_src"
 
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406])

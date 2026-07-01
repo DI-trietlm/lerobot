@@ -136,7 +136,7 @@ def main() -> None:
     print(f"\nframes: {total} -> {kept} (cut {total - kept})")
     print(f"episodes with cuts: {int((manifest['n_cut'] > 0).sum())}/{len(manifest)}")
 
-    manifest_path = Path("xai") / f"safe_pose_cut_manifest_{args.output_repo_id.split('/')[-1]}.csv"
+    manifest_path = Path("xai") / "artifacts" / f"safe_pose_cut_manifest_{args.output_repo_id.split('/')[-1]}.csv"
     manifest.to_csv(manifest_path, index=False)
     print(f"manifest -> {manifest_path}")
     if args.dry_run:

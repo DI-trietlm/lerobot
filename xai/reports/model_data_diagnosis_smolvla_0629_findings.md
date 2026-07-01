@@ -2,7 +2,7 @@
 
 This note summarizes the completed offline diagnosis for the 0629 runtime traces.
 Raw CSV/PNG outputs are intentionally ignored under
-`xai/model_data_diagnosis_smolvla_0629_outputs/`.
+`xai/artifacts/model_data_diagnosis_smolvla_0629_outputs/`.
 
 ## Inputs
 

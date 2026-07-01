@@ -1304,7 +1304,7 @@ class RTCControlGUI(tk.Tk):
     # ----- Safe pose (capture-file driven; no defaults) --------------------------------
 
     def _try_autoload_safe_pose(self):
-        default = "safe_pose.json"
+        default = "runtime_configs/safe_pose.json"
         if os.path.exists(default):
             try:
                 self._load_safe_pose_file(default)
@@ -1313,7 +1313,7 @@ class RTCControlGUI(tk.Tk):
                 self._log(f"[WARN] Could not auto-load {default}: {exc}")
         else:
             self._log(
-                "[INFO] No safe_pose.json found. Capture one with "
+                "[INFO] No runtime_configs/safe_pose.json found. Capture one with "
                 "'python -m lerobot.gui.capture_safe_pose' and Load it before Auto Reset Cycle."
             )
 

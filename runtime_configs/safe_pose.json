@@ -11,5 +11,5 @@
   "robot_id": "DI_VLA_FOLLOWER",
   "use_degrees": true,
   "captured_at": "2026-06-11T08:43:04",
-  "source_config": "rtc_xvla_config.json"
+  "source_config": "runtime_configs/rtc_xvla_config.json"
 }

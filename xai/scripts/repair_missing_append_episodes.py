@@ -19,8 +19,8 @@ from lerobot.utils.utils import flatten_dict
 
 ROOT = Path(r"F:\llms\hf\models\lerobot\di-techinnova\so-arm-101-pouring-0.3-cutted")
 SOURCE_ROOT = Path(r"F:\llms\hf\models\lerobot\di-techinnova\so-arm-101-pouring-0.3_20260622_104354")
-MANIFEST = Path("xai/append_cut_idle_manifest.csv")
-BACKUP = Path("xai/repair_missing_append_backup")
+MANIFEST = Path("xai/artifacts/append_cut_idle_manifest.csv")
+BACKUP = Path("xai/artifacts/repair_missing_append_backup")
 TMP = Path("xai/_repair_missing_append_tmp")
 
 EXPECTED_EPISODES = {50, 51, 52}

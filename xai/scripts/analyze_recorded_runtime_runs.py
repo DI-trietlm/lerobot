@@ -389,7 +389,7 @@ def save_plots(run_dir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("runs", nargs="+")
-    parser.add_argument("--safe-pose", default="safe_pose.json")
+    parser.add_argument("--safe-pose", default="runtime_configs/safe_pose.json")
     parser.add_argument("--keys", default=",".join(DEFAULT_KEYS))
     args = parser.parse_args()
 

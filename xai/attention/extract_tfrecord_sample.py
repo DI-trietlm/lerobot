@@ -81,7 +81,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--out-dir",
-        default="xai/outputs",
+        default="xai/artifacts/attention_outputs",
         help="Directory to write extracted files",
     )
     args = parser.parse_args()

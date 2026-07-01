@@ -93,7 +93,7 @@ Expected output: DaViT stage shapes, VRAM usage, and `SMOKE TEST PASSED`.
 python3 xai_feature_maps.py --image /path/to/image.png --alpha 0.55 --cmap turbo
 ```
 
-Outputs saved to `xai/outputs/`:
+Outputs saved to `xai/artifacts/attention_outputs/`:
 - `feature_maps_grid.png` — 2×5 grid (raw + overlay per stage)
 - `feature_maps_combined.png` — averaged heatmap across all stages
 - `feature_maps_stage{0-3}.png` — individual per-stage overlays
@@ -106,7 +106,7 @@ python3 xai_p0v_raw_attention.py \
     --instruction "Pour coffee from the orange cup into the light blue cup."
 ```
 
-Outputs saved to `xai/outputs/`:
+Outputs saved to `xai/artifacts/attention_outputs/`:
 - `p0v_per_layer_grid.png` — attention per encoder layer
 - `p0v_head_analysis_layer11.png` — per-head analysis (last layer)
 - `p0v_aggregated.png` — mean across all layers
@@ -120,7 +120,7 @@ python3 xai_p0v_raw_attention_video.py \
     --instruction "Pour coffee from the orange cup into the light blue cup."
 ```
 
-Output: `xai/outputs/p0v_video_<videoname>.mp4`
+Output: `xai/artifacts/attention_outputs/p0v_video_<videoname>.mp4`
 
 ### 4b. SmolVLA cross/self attention video (recorded_obs frames)
 
@@ -137,7 +137,7 @@ each frame is a 2-row figure like the reference paper image:
 uv run python xai_smolvla_attention_video.py \
     --obs-dir ../recorded_obs-05-06-03 --dry-run
 
-# full run (outputs to xai/outputs/smolvla_attn_<dir>_<camera>.mp4)
+# full run (outputs to xai/artifacts/attention_outputs/smolvla_attn_<dir>_<camera>.mp4)
 uv run python xai_smolvla_attention_video.py \
     --obs-dir ../recorded_obs-05-06-03 \
     --model di-techinnova/smolvla-pick-cup-0.2 \
@@ -207,7 +207,7 @@ uv run python xai_smolvla_occlusion.py --device cpu \
     --frames 0 --cameras camera1 camera2 --grid 6 --word box
 ```
 
-Outputs: `xai/outputs/smolvla_occlusion[_word-<w>]_<dir>_f<NNN>.png` — top row source,
+Outputs: `xai/artifacts/attention_outputs/smolvla_occlusion[_word-<w>]_<dir>_f<NNN>.png` — top row source,
 bottom row the sensitivity heatmap overlaid (bright = the model relies on this region).
 
 Cost: each occluded cell needs a full action sample (~10 s/forward on CPU), so this is

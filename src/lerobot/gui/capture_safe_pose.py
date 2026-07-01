@@ -20,8 +20,8 @@ is removed at disconnect (i.e. it will NOT free-fall). The GUI moves the arm her
 
 Usage (run in your own terminal, it is interactive):
 
-    uv run python -m lerobot.gui.capture_safe_pose --config_path rtc_xvla_config.json
-    uv run python -m lerobot.gui.capture_safe_pose --config_path rtc_xvla_config.json --output safe_pose.json
+    uv run python -m lerobot.gui.capture_safe_pose --config_path runtime_configs/rtc_xvla_config.json
+    uv run python -m lerobot.gui.capture_safe_pose --config_path runtime_configs/rtc_xvla_config.json --output runtime_configs/safe_pose.json
 
 It reuses the robot block of an exported RTC config (Export Config in the GUI),
 disables torque so you can move the arm by hand, then records its joint positions.
@@ -91,7 +91,7 @@ def capture(config_path: str, output: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Capture a safe rest pose for the RTC GUI auto-reset cycle.")
     ap.add_argument("--config_path", required=True, help="Exported RTC config JSON (uses its 'robot' block).")
-    ap.add_argument("--output", default="safe_pose.json", help="Where to write the safe-pose file.")
+    ap.add_argument("--output", default="runtime_configs/safe_pose.json", help="Where to write the safe-pose file.")
     args = ap.parse_args()
     capture(args.config_path, args.output)
 

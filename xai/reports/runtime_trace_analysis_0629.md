@@ -11,7 +11,7 @@ Mỗi run có đủ:
 - `client_actions.jsonl`: chunk nhận từ server, queue/aggregation, command gửi robot.
 - `metadata.jsonl`: current joint state và camera frame path/timestep.
 - `images/camera1`, `images/camera2`.
-- `safe_pose.json`.
+- `runtime_configs/safe_pose.json`.
 
 Joint order:
 
@@ -426,16 +426,16 @@ Cần offline model replay/ablation trên chính recorded observations:
 4. So old checkpoint vs new checkpoint trên cùng recorded observation.
 5. Plot projection `p(predicted chunk)` so với `p(current_state)`.
 
-Notebook đề xuất: `xai/offline_replay_recorded_obs_0629.ipynb`.
+Notebook đề xuất: `xai/notebooks/offline_replay_recorded_obs_0629.ipynb`.
 
 ## 14. Cập nhật sau offline replay notebook
 
-Notebook `xai/offline_replay_recorded_obs_0629.ipynb` đã chạy xong và sinh:
+Notebook `xai/notebooks/offline_replay_recorded_obs_0629.ipynb` đã chạy xong và sinh:
 
-- `xai/offline_replay_recorded_obs_0629_outputs/ablation_predictions.csv`
-- `xai/offline_replay_recorded_obs_0629_outputs/ablation_summary.csv`
-- `xai/offline_replay_recorded_obs_0629_outputs/recorded_obs-0629-01_ablation_p_end.png`
-- `xai/offline_replay_recorded_obs_0629_outputs/recorded_obs-0629-02_ablation_p_end.png`
+- `xai/artifacts/offline_replay_recorded_obs_0629_outputs/ablation_predictions.csv`
+- `xai/artifacts/offline_replay_recorded_obs_0629_outputs/ablation_summary.csv`
+- `xai/artifacts/offline_replay_recorded_obs_0629_outputs/recorded_obs-0629-01_ablation_p_end.png`
+- `xai/artifacts/offline_replay_recorded_obs_0629_outputs/recorded_obs-0629-02_ablation_p_end.png`
 
 Kết quả này từng **supersede** một phần kết luận ở mục 11-13, nhưng sau đó đã bị dữ liệu live non-RTC mới bác bỏ thêm. Xem mục 15.
 
@@ -695,7 +695,7 @@ Bước tiếp theo nên là replay offline trên chính `recorded_obs-0629-nonr
 
 ## 16. Cập nhật sau notebook replay đã sửa pipeline
 
-Notebook `xai/offline_replay_recorded_obs_0629.ipynb` đã được sửa để dùng đúng path giống server:
+Notebook `xai/notebooks/offline_replay_recorded_obs_0629.ipynb` đã được sửa để dùng đúng path giống server:
 
 ```text
 raw_observation_to_observation()

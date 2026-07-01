@@ -109,7 +109,7 @@ def main() -> None:
     parser.add_argument("--camera-encoder-g", type=int, default=2)
     parser.add_argument("--camera-encoder-pix-fmt", default="yuv420p")
     parser.add_argument("--encoder-threads", type=int, default=None)
-    parser.add_argument("--manifest", default="xai/append_cut_idle_manifest.csv")
+    parser.add_argument("--manifest", default="xai/artifacts/append_cut_idle_manifest.csv")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 

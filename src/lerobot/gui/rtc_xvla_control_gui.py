@@ -21,6 +21,7 @@ from lerobot.robots.so_follower import SO100FollowerConfig, SO101FollowerConfig
 from lerobot.rtc_inference.configs import AGGREGATE_FUNCTIONS, RobotClientConfig
 from lerobot.rtc_inference.robot_client import RobotClient
 from lerobot.utils.import_utils import register_third_party_plugins
+from lerobot.vla_harness.config import HarnessConfig
 
 
 @dataclass
@@ -42,7 +43,7 @@ class _FieldSpec:
     options: tuple[str, ...] = ()
 
 
-class RTCXVLAControlGUI(tk.Tk):
+class RTCControlGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("RTC Policy Control Panel")
@@ -222,23 +223,23 @@ class RTCXVLAControlGUI(tk.Tk):
     def _field_sections(self) -> dict[str, list[_FieldSpec]]:
         return {
             "Connection": [
-                _FieldSpec("server_address", "Server Address", "192.168.1.107:4567", "str"),
+                _FieldSpec("server_address", "Server Address", "192.168.30.244:4567", "str"),
                 _FieldSpec(
                     "task",
                     "Task",
-                    "Pour sunflower seeds from the orange cup into the clean cup on the white cloth.",
+                    "Pour from orange cup to blue cup.",
                     "str",
                 ),
             ],
             "Policy": [
-                _FieldSpec("policy_type", "Policy Type", "xvla", "choice", ("xvla", "smolvla")),
-                _FieldSpec("pretrained_name_or_path", "Pretrained", "trietlm0306/xvla-poursing-v1", "str"),
+                _FieldSpec("policy_type", "Policy Type", "smolvla", "choice", ("smolvla", "xvla")),
+                _FieldSpec("pretrained_name_or_path", "Pretrained", "di-techinnova/smolvla-pouring-0.3-cutted", "str"),
                 _FieldSpec("policy_device", "Policy Device", "cuda", "str"),
                 _FieldSpec("client_device", "Client Device", "cpu", "str"),
                 _FieldSpec(
                     "rename_map",
                     "Rename Map (JSON)",
-                    '{"observation.images.camera1":"observation.images.image","observation.images.camera2":"observation.images.image2"}',
+                    '{"observation.images.camera1":"observation.images.camera1","observation.images.camera2":"observation.images.camera2"}',
                     "json_dict",
                 ),
             ],
@@ -246,7 +247,7 @@ class RTCXVLAControlGUI(tk.Tk):
                 _FieldSpec(
                     "robot_type",
                     "Robot Type",
-                    "so101_follower",
+                    "so100_follower",
                     "choice",
                     ("so101_follower", "so100_follower"),
                 ),
@@ -269,12 +270,12 @@ class RTCXVLAControlGUI(tk.Tk):
                 ),
             ],
             "Runtime": [
-                _FieldSpec("actions_per_chunk", "Actions Per Chunk", "30", "int"),
-                _FieldSpec("chunk_size_threshold", "Chunk Size Threshold", "0.7", "float"),
+                _FieldSpec("actions_per_chunk", "Actions Per Chunk", "35", "int"),
+                _FieldSpec("chunk_size_threshold", "Chunk Size Threshold", "0.5", "float"),
                 _FieldSpec(
                     "aggregate_fn_name",
                     "Aggregate Function",
-                    "latest_only",
+                    "weighted_average",
                     "choice",
                     tuple(AGGREGATE_FUNCTIONS.keys()),
                 ),
@@ -313,7 +314,7 @@ class RTCXVLAControlGUI(tk.Tk):
                 ),
                 _FieldSpec("record_obs_dir", "Record Output Directory", "recorded_obs", "str"),
                 _FieldSpec(
-                    "record_action_enable", "Record Actions", "false", "bool", ("true", "false")
+                    "record_action_enable", "Record Actions", "true", "bool", ("true", "false")
                 ),
                 _FieldSpec("record_action_dir", "Action Trace Directory", "recorded_obs", "str"),
             ],
@@ -332,15 +333,124 @@ class RTCXVLAControlGUI(tk.Tk):
                     "str",
                 ),
             ],
-            # Safe start-pose reset target. Defaults are the per-joint MEDIAN of the
-            # 96 training-episode start poses (di-techinnova/so-arm-101-pouring-0.2),
-            # so reset lands inside the in-distribution manifold the policy was trained
-            # on (NOT the old all-zeros pose, which was OOD on shoulder_pan and gripper).
+            "VLA Harness": [
+                _FieldSpec("harness_enable", "Harness Enable", "false", "bool", ("true", "false")),
+                _FieldSpec("harness_profile_path", "Harness Profile Path", "", "str"),
+                _FieldSpec("harness_shadow_mode", "Global Shadow Mode", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_fail_closed", "Fail Closed", "false", "bool", ("true", "false")),
+                _FieldSpec("harness_log_dir", "Harness Log Directory", "harness_traces", "str"),
+                _FieldSpec("harness_server_enable", "Server Enable", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_client_enable", "Client Enable", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_micro_rescue_enable", "Micro-Rescue Enable", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_invariant_guard_enable", "Invariant Guard Enable", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_speed_envelope_enable", "Speed Envelope Enable", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_sync_enable", "Sync/Flush Enable", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_trace_enable", "Trace Enable", "true", "bool", ("true", "false")),
+                _FieldSpec(
+                    "harness_server_chunk_validator_enable",
+                    "Server Chunk Validator",
+                    "true",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec(
+                    "harness_server_invariant_guard_enable",
+                    "Server Invariant Guard",
+                    "true",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec(
+                    "harness_server_micro_rescue_proposal_enable",
+                    "Server Micro-Rescue Proposal",
+                    "true",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec(
+                    "harness_server_reject_resample_enable",
+                    "Server Reject/Fallback",
+                    "true",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec("harness_server_max_resample_attempts", "Server Max Resample Attempts", "1", "int"),
+                _FieldSpec("harness_server_re_infer_on_intervention", "Server Re-Infer On Intervention", "true", "bool", ("true", "false")),
+                _FieldSpec(
+                    "harness_client_execution_guard_enable",
+                    "Client Execution Guard",
+                    "true",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec(
+                    "harness_client_hard_invariant_guard_enable",
+                    "Client Hard Invariant Guard",
+                    "true",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec(
+                    "harness_client_speed_envelope_enable",
+                    "Client Speed Envelope",
+                    "true",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec(
+                    "harness_client_tracking_monitor_enable",
+                    "Client Tracking Monitor",
+                    "true",
+                    "bool",
+                    ("true", "false"),
+                ),
+                _FieldSpec("harness_client_clear_queue_on_intervention", "Client Clear Queue On Intervention", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_client_request_reinfer_on_intervention", "Client Request Re-Infer", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_micro_rescue_shadow_mode", "Micro-Rescue Shadow", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_micro_rescue_state_knn_enable", "Micro-Rescue State KNN", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_micro_rescue_image_knn_enable", "Micro-Rescue Image KNN", "false", "bool", ("true", "false")),
+                _FieldSpec("harness_micro_rescue_k_neighbors", "Micro-Rescue K Neighbors", "16", "int"),
+                _FieldSpec("harness_micro_rescue_snippet_horizon_steps", "Micro-Rescue Horizon Steps", "8", "int"),
+                _FieldSpec("harness_micro_rescue_max_duration_s", "Micro-Rescue Max Duration (s)", "1.0", "float"),
+                _FieldSpec("harness_micro_rescue_blend_alpha", "Micro-Rescue Blend Alpha", "1.0", "float"),
+                _FieldSpec("harness_micro_rescue_min_future_progress_score", "Micro-Rescue Min Future Progress", "0.2", "float"),
+                _FieldSpec("harness_micro_rescue_max_state_distance", "Micro-Rescue Max Distance (optional)", "", "optional_float"),
+                _FieldSpec("harness_micro_rescue_cooldown_s", "Micro-Rescue Cooldown (s)", "2.0", "float"),
+                _FieldSpec("harness_micro_rescue_max_rescues_per_episode", "Micro-Rescue Max Per Episode", "3", "int"),
+                _FieldSpec("harness_invariant_guard_shadow_mode", "Invariant Guard Shadow", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_invariant_guard_min_support", "Invariant Min Support", "0.95", "float"),
+                _FieldSpec("harness_invariant_guard_max_train_violation_rate", "Invariant Max Train Violation", "0.02", "float"),
+                _FieldSpec("harness_invariant_guard_min_mode_confidence", "Invariant Min Mode Confidence", "0.7", "float"),
+                _FieldSpec("harness_invariant_guard_hard_guard_categories", "Invariant Hard Categories (JSON list)", '["catastrophic_actuator_release"]', "json_list"),
+                _FieldSpec("harness_invariant_guard_soft_guard_categories", "Invariant Soft Categories (JSON list)", '["value_envelope","no_backtrack"]', "json_list"),
+                _FieldSpec("harness_invariant_guard_flush_on_hard_guard", "Invariant Flush On Hard", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_speed_envelope_shadow_mode", "Speed Envelope Shadow", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_speed_envelope_percentile_low", "Speed Percentile Low", "0.005", "float"),
+                _FieldSpec("harness_speed_envelope_percentile_high", "Speed Percentile High", "0.995", "float"),
+                _FieldSpec("harness_speed_envelope_mode_conditioned", "Speed Mode Conditioned", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_speed_envelope_max_consecutive_clamps", "Speed Max Consecutive Clamps", "3", "int"),
+                _FieldSpec("harness_speed_envelope_flush_after_repeated_clamp", "Speed Flush After Repeated Clamp", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_sync_require_chunk_id", "Sync Require Chunk ID", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_sync_flush_on_reject", "Sync Flush On Reject", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_sync_flush_on_rescue", "Sync Flush On Rescue", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_sync_flush_on_hard_clamp", "Sync Flush On Hard Clamp", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_sync_flush_on_repeated_speed_clamp", "Sync Flush On Repeated Speed Clamp", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_sync_block_execution_until_fresh_chunk", "Sync Block Until Fresh Chunk", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_trace_record_images", "Trace Record Images", "false", "bool", ("true", "false")),
+                _FieldSpec("harness_trace_record_raw_chunks", "Trace Raw Chunks", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_trace_record_postprocessed_chunks", "Trace Postprocessed Chunks", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_trace_record_executed_actions", "Trace Executed Actions", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_trace_record_mode_estimates", "Trace Mode Estimates", "true", "bool", ("true", "false")),
+                _FieldSpec("harness_trace_record_rescue_neighbors", "Trace Rescue Neighbors", "true", "bool", ("true", "false")),
+            ],
+            # Safe start-pose reset target. Export/import now persists these fields
+            # explicitly; defaults are only a fallback before a config is imported or
+            # dataset analysis is run.
             "Start Pose (safe reset target, degrees)": [
                 _FieldSpec(
                     "dataset_repo_id",
                     "Dataset Repo (for start-pose analysis)",
-                    "di-techinnova/so-arm-101-pouring-0.2",
+                    "di-techinnova/so-arm-101-pouring-0.3-cutted",
                     "str",
                 ),
                 _FieldSpec(
@@ -468,6 +578,12 @@ class RTCXVLAControlGUI(tk.Tk):
             return None
         return int(text)
 
+    def _parse_optional_float(self, key: str) -> float | None:
+        text = self._vars[key].get().strip()
+        if text == "":
+            return None
+        return float(text)
+
     def _parse_dict_like(self, key: str) -> dict:
         text = self._vars[key].get().strip()
         if text == "":
@@ -483,6 +599,21 @@ class RTCXVLAControlGUI(tk.Tk):
 
         if not isinstance(parsed, dict):
             raise ValueError(f"{key}: expected a dict-like object")
+        return parsed
+
+    def _parse_list_like(self, key: str) -> list:
+        text = self._vars[key].get().strip()
+        if text == "":
+            return []
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            try:
+                parsed = ast.literal_eval(text)
+            except Exception as exc:
+                raise ValueError(f"{key}: invalid list/json format") from exc
+        if not isinstance(parsed, list):
+            raise ValueError(f"{key}: expected a list-like object")
         return parsed
 
     def _parse_optional_float_or_dict(self, key: str):
@@ -581,6 +712,110 @@ class RTCXVLAControlGUI(tk.Tk):
             f"GUI currently supports robot_type in {{so101_follower, so100_follower}}. Received: {robot_type}"
         )
 
+    def _build_harness_config(self) -> HarnessConfig:
+        cfg = HarnessConfig(
+            enable=self._parse_bool("harness_enable"),
+            profile_path=self._vars["harness_profile_path"].get().strip() or None,
+            shadow_mode=self._parse_bool("harness_shadow_mode"),
+            fail_closed=self._parse_bool("harness_fail_closed"),
+            log_dir=self._vars["harness_log_dir"].get().strip() or "harness_traces",
+        )
+        cfg.server.enable = self._parse_bool("harness_server_enable")
+        cfg.server.chunk_validator_enable = self._parse_bool("harness_server_chunk_validator_enable")
+        cfg.server.invariant_guard_enable = self._parse_bool("harness_server_invariant_guard_enable")
+        cfg.server.micro_rescue_proposal_enable = self._parse_bool(
+            "harness_server_micro_rescue_proposal_enable"
+        )
+        cfg.server.reject_resample_enable = self._parse_bool("harness_server_reject_resample_enable")
+        cfg.server.max_resample_attempts = self._parse_int("harness_server_max_resample_attempts")
+        cfg.server.re_infer_on_intervention = self._parse_bool("harness_server_re_infer_on_intervention")
+
+        cfg.client.enable = self._parse_bool("harness_client_enable")
+        cfg.client.execution_guard_enable = self._parse_bool("harness_client_execution_guard_enable")
+        cfg.client.hard_invariant_guard_enable = self._parse_bool(
+            "harness_client_hard_invariant_guard_enable"
+        )
+        cfg.client.speed_envelope_enable = self._parse_bool("harness_client_speed_envelope_enable")
+        cfg.client.tracking_monitor_enable = self._parse_bool("harness_client_tracking_monitor_enable")
+        cfg.client.clear_queue_on_intervention = self._parse_bool(
+            "harness_client_clear_queue_on_intervention"
+        )
+        cfg.client.request_reinfer_on_intervention = self._parse_bool(
+            "harness_client_request_reinfer_on_intervention"
+        )
+
+        cfg.micro_rescue.enable = self._parse_bool("harness_micro_rescue_enable")
+        cfg.micro_rescue.shadow_mode = self._parse_bool("harness_micro_rescue_shadow_mode")
+        cfg.micro_rescue.state_knn_enable = self._parse_bool("harness_micro_rescue_state_knn_enable")
+        cfg.micro_rescue.image_knn_enable = self._parse_bool("harness_micro_rescue_image_knn_enable")
+        cfg.micro_rescue.k_neighbors = self._parse_int("harness_micro_rescue_k_neighbors")
+        cfg.micro_rescue.snippet_horizon_steps = self._parse_int(
+            "harness_micro_rescue_snippet_horizon_steps"
+        )
+        cfg.micro_rescue.max_duration_s = self._parse_float("harness_micro_rescue_max_duration_s")
+        cfg.micro_rescue.blend_alpha = self._parse_float("harness_micro_rescue_blend_alpha")
+        cfg.micro_rescue.min_future_progress_score = self._parse_float(
+            "harness_micro_rescue_min_future_progress_score"
+        )
+        cfg.micro_rescue.max_state_distance = self._parse_optional_float(
+            "harness_micro_rescue_max_state_distance"
+        )
+        cfg.micro_rescue.cooldown_s = self._parse_float("harness_micro_rescue_cooldown_s")
+        cfg.micro_rescue.max_rescues_per_episode = self._parse_int(
+            "harness_micro_rescue_max_rescues_per_episode"
+        )
+
+        cfg.invariant_guard.enable = self._parse_bool("harness_invariant_guard_enable")
+        cfg.invariant_guard.shadow_mode = self._parse_bool("harness_invariant_guard_shadow_mode")
+        cfg.invariant_guard.min_support = self._parse_float("harness_invariant_guard_min_support")
+        cfg.invariant_guard.max_train_violation_rate = self._parse_float(
+            "harness_invariant_guard_max_train_violation_rate"
+        )
+        cfg.invariant_guard.min_mode_confidence = self._parse_float(
+            "harness_invariant_guard_min_mode_confidence"
+        )
+        cfg.invariant_guard.hard_guard_categories = [
+            str(item) for item in self._parse_list_like("harness_invariant_guard_hard_guard_categories")
+        ]
+        cfg.invariant_guard.soft_guard_categories = [
+            str(item) for item in self._parse_list_like("harness_invariant_guard_soft_guard_categories")
+        ]
+        cfg.invariant_guard.flush_on_hard_guard = self._parse_bool(
+            "harness_invariant_guard_flush_on_hard_guard"
+        )
+        cfg.speed_envelope.enable = self._parse_bool("harness_speed_envelope_enable")
+        cfg.speed_envelope.shadow_mode = self._parse_bool("harness_speed_envelope_shadow_mode")
+        cfg.speed_envelope.percentile_low = self._parse_float("harness_speed_envelope_percentile_low")
+        cfg.speed_envelope.percentile_high = self._parse_float("harness_speed_envelope_percentile_high")
+        cfg.speed_envelope.mode_conditioned = self._parse_bool("harness_speed_envelope_mode_conditioned")
+        cfg.speed_envelope.max_consecutive_clamps = self._parse_int(
+            "harness_speed_envelope_max_consecutive_clamps"
+        )
+        cfg.speed_envelope.flush_after_repeated_clamp = self._parse_bool(
+            "harness_speed_envelope_flush_after_repeated_clamp"
+        )
+        cfg.sync.enable = self._parse_bool("harness_sync_enable")
+        cfg.sync.require_chunk_id = self._parse_bool("harness_sync_require_chunk_id")
+        cfg.sync.flush_on_reject = self._parse_bool("harness_sync_flush_on_reject")
+        cfg.sync.flush_on_rescue = self._parse_bool("harness_sync_flush_on_rescue")
+        cfg.sync.flush_on_hard_clamp = self._parse_bool("harness_sync_flush_on_hard_clamp")
+        cfg.sync.flush_on_repeated_speed_clamp = self._parse_bool(
+            "harness_sync_flush_on_repeated_speed_clamp"
+        )
+        cfg.sync.block_execution_until_fresh_chunk = self._parse_bool(
+            "harness_sync_block_execution_until_fresh_chunk"
+        )
+        cfg.trace.enable = self._parse_bool("harness_trace_enable")
+        cfg.trace.record_images = self._parse_bool("harness_trace_record_images")
+        cfg.trace.record_raw_chunks = self._parse_bool("harness_trace_record_raw_chunks")
+        cfg.trace.record_postprocessed_chunks = self._parse_bool(
+            "harness_trace_record_postprocessed_chunks"
+        )
+        cfg.trace.record_executed_actions = self._parse_bool("harness_trace_record_executed_actions")
+        cfg.trace.record_mode_estimates = self._parse_bool("harness_trace_record_mode_estimates")
+        cfg.trace.record_rescue_neighbors = self._parse_bool("harness_trace_record_rescue_neighbors")
+        return cfg
+
     def _build_client_config(self) -> RobotClientConfig:
         schedule_name = self._vars["rtc_prefix_attention_schedule"].get().strip().upper()
         schedule = RTCAttentionSchedule[schedule_name]
@@ -617,6 +852,7 @@ class RTCXVLAControlGUI(tk.Tk):
             record_action_dir=self._vars["record_action_dir"].get().strip() or "recorded_obs",
             capture_attn_enable=self._parse_bool("capture_attn_enable"),
             capture_attn_dir=self._vars["capture_attn_dir"].get().strip() or "attention_captures",
+            harness=self._build_harness_config(),
         )
         return cfg
 
@@ -662,6 +898,17 @@ class RTCXVLAControlGUI(tk.Tk):
             "record_action_dir": cfg.record_action_dir,
             "capture_attn_enable": cfg.capture_attn_enable,
             "capture_attn_dir": cfg.capture_attn_dir,
+            "harness": draccus.encode(cfg.harness),
+            "dataset_repo_id": self._vars["dataset_repo_id"].get().strip(),
+            "reset_pose_mode": self._vars["reset_pose_mode"].get().strip(),
+            "start_pose_shoulder_pan": self._parse_float("start_pose_shoulder_pan"),
+            "start_pose_shoulder_lift": self._parse_float("start_pose_shoulder_lift"),
+            "start_pose_elbow_flex": self._parse_float("start_pose_elbow_flex"),
+            "start_pose_wrist_flex": self._parse_float("start_pose_wrist_flex"),
+            "start_pose_wrist_roll": self._parse_float("start_pose_wrist_roll"),
+            "start_pose_gripper": self._parse_float("start_pose_gripper"),
+            "reset_duration_start": self._parse_float("reset_duration_start"),
+            "reset_duration_after_stop": self._parse_float("reset_duration_after_stop"),
         }
 
     def _on_export_config(self):
@@ -676,7 +923,7 @@ class RTCXVLAControlGUI(tk.Tk):
         path = filedialog.asksaveasfilename(
             title="Export RTC config",
             defaultextension=".json",
-            initialfile="rtc_xvla_config.json",
+            initialfile="rtc_config.json",
             filetypes=[("JSON config", "*.json"), ("All files", "*.*")],
         )
         if not path:
@@ -691,7 +938,7 @@ class RTCXVLAControlGUI(tk.Tk):
             return
 
         run_cmd = (
-            "uv run python scripts/orchestrator/orchestrator_rtc_xvla_client_only.py "
+            "uv run python scripts/orchestrator/orchestrator_rtc_client_only.py "
             f'--config_path="{path}"'
         )
         self._log(f"[OK] Config exported to {path}")
@@ -732,6 +979,22 @@ class RTCXVLAControlGUI(tk.Tk):
             "max_relative_target": "robot_max_relative_target",
             "cameras": "robot_cameras",
         }
+        harness_field_to_var = {
+            "enable": "harness_enable",
+            "profile_path": "harness_profile_path",
+            "shadow_mode": "harness_shadow_mode",
+            "fail_closed": "harness_fail_closed",
+            "log_dir": "harness_log_dir",
+        }
+        harness_nested_to_prefix = {
+            "server": "harness_server",
+            "client": "harness_client",
+            "micro_rescue": "harness_micro_rescue",
+            "invariant_guard": "harness_invariant_guard",
+            "speed_envelope": "harness_speed_envelope",
+            "sync": "harness_sync",
+            "trace": "harness_trace",
+        }
 
         skipped: list[str] = []
         for key, value in payload.items():
@@ -746,6 +1009,27 @@ class RTCXVLAControlGUI(tk.Tk):
                             skipped.append(f"robot.{rkey}")
                         continue
                     self._vars[var_key].set(self._format_var_value(rval))
+                continue
+
+            if key == "harness":
+                if not isinstance(value, dict):
+                    skipped.append("harness")
+                    continue
+                for hkey, hval in value.items():
+                    if hkey in harness_field_to_var:
+                        self._vars[harness_field_to_var[hkey]].set(self._format_var_value(hval))
+                        continue
+                    prefix = harness_nested_to_prefix.get(hkey)
+                    if prefix is None:
+                        skipped.append(f"harness.{hkey}")
+                        continue
+                    if not isinstance(hval, dict):
+                        skipped.append(f"harness.{hkey}")
+                        continue
+                    for subkey, subval in hval.items():
+                        var_key = f"{prefix}_{subkey}"
+                        if var_key in self._vars:
+                            self._vars[var_key].set(self._format_var_value(subval))
                 continue
 
             if key in self._vars:
@@ -1361,5 +1645,8 @@ class RTCXVLAControlGUI(tk.Tk):
 
 def run_gui() -> None:
     register_third_party_plugins()
-    app = RTCXVLAControlGUI()
+    app = RTCControlGUI()
     app.mainloop()
+
+
+RTCXVLAControlGUI = RTCControlGUI

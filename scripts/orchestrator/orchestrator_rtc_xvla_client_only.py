@@ -21,10 +21,11 @@ from lerobot.rtc_inference.configs import AGGREGATE_FUNCTIONS, RobotClientConfig
 from lerobot.rtc_inference.helpers import visualize_action_queue_size
 from lerobot.rtc_inference.robot_client import RobotClient
 from lerobot.utils.import_utils import register_third_party_plugins
+from lerobot.vla_harness.config import HarnessConfig
 
 
 @dataclass
-class RTCXVLAClientOnlyConfig:
+class RTCClientOnlyConfig:
     server_address: str = "192.168.1.107:4567"
 
     robot: RobotConfig | None = None
@@ -49,6 +50,7 @@ class RTCXVLAClientOnlyConfig:
     aggregate_fn_name: str = "latest_only"
 
     # RTC parameters exposed to user
+    rtc_enabled: bool = True
     rtc_execution_horizon: int = 10
     rtc_max_guidance_weight: float = 10.0
     rtc_prefix_attention_schedule: RTCAttentionSchedule = RTCAttentionSchedule.EXP
@@ -68,16 +70,34 @@ class RTCXVLAClientOnlyConfig:
     # Observation recording
     record_obs_enable: bool = False
     record_obs_dir: str = "recorded_obs"
+    record_action_enable: bool = False
+    record_action_dir: str = "recorded_obs"
 
     # Attention capture (server-side, X-VLA only)
     capture_attn_enable: bool = False
     capture_attn_dir: str = "attention_captures"
 
+    # Runtime harness
+    harness: HarnessConfig = field(default_factory=HarnessConfig)
+
+    # GUI-only start-pose metadata. The standalone CLI does not reset the robot,
+    # but accepting these fields keeps GUI export/import round-trippable.
+    dataset_repo_id: str = ""
+    reset_pose_mode: str = "median"
+    start_pose_shoulder_pan: float | None = None
+    start_pose_shoulder_lift: float | None = None
+    start_pose_elbow_flex: float | None = None
+    start_pose_wrist_flex: float | None = None
+    start_pose_wrist_roll: float | None = None
+    start_pose_gripper: float | None = None
+    reset_duration_start: float = 8.0
+    reset_duration_after_stop: float = 8.0
+
     def __post_init__(self):
         if self.robot is None:
             raise ValueError("robot configuration is required")
-        if self.policy_type != "xvla":
-            raise ValueError("policy_type must be 'xvla' for RTC XVLA orchestrator")
+        if self.policy_type not in {"xvla", "smolvla"}:
+            raise ValueError("policy_type must be one of {'xvla', 'smolvla'}")
         if not self.pretrained_name_or_path:
             raise ValueError("pretrained_name_or_path is required")
         if not isinstance(self.rename_map, dict):
@@ -102,10 +122,15 @@ class RTCXVLAClientOnlyConfig:
             raise ValueError("inference_delay_steps must be >= 0")
 
 
-def _to_robot_client_config(cfg: RTCXVLAClientOnlyConfig) -> RobotClientConfig:
+RTCXVLAClientOnlyConfig = RTCClientOnlyConfig
+
+
+def _to_robot_client_config(cfg: RTCClientOnlyConfig) -> RobotClientConfig:
     return RobotClientConfig(
         record_obs_enable=cfg.record_obs_enable,
         record_obs_dir=cfg.record_obs_dir,
+        record_action_enable=cfg.record_action_enable,
+        record_action_dir=cfg.record_action_dir,
         policy_type=cfg.policy_type,
         pretrained_name_or_path=cfg.pretrained_name_or_path,
         robot=cfg.robot,
@@ -123,7 +148,7 @@ def _to_robot_client_config(cfg: RTCXVLAClientOnlyConfig) -> RobotClientConfig:
         interpolation_multiplier=cfg.interpolation_multiplier,
         aggregate_fn_name=cfg.aggregate_fn_name,
         debug_visualize_queue_size=cfg.debug_visualize_queue_size,
-        rtc_enabled=True,
+        rtc_enabled=cfg.rtc_enabled,
         rtc_execution_horizon=cfg.rtc_execution_horizon,
         rtc_max_guidance_weight=cfg.rtc_max_guidance_weight,
         rtc_prefix_attention_schedule=cfg.rtc_prefix_attention_schedule,
@@ -133,10 +158,11 @@ def _to_robot_client_config(cfg: RTCXVLAClientOnlyConfig) -> RobotClientConfig:
         xvla_domain_id=cfg.xvla_domain_id,
         capture_attn_enable=cfg.capture_attn_enable,
         capture_attn_dir=cfg.capture_attn_dir,
+        harness=cfg.harness,
     )
 
 
-def run_client_only(cfg: RTCXVLAClientOnlyConfig) -> None:
+def run_client_only(cfg: RTCClientOnlyConfig) -> None:
     client_cfg = _to_robot_client_config(cfg)
     client = RobotClient(client_cfg)
 
@@ -163,7 +189,7 @@ def run_client_only(cfg: RTCXVLAClientOnlyConfig) -> None:
 
 
 @draccus.wrap()
-def main(cfg: RTCXVLAClientOnlyConfig) -> None:
+def main(cfg: RTCClientOnlyConfig) -> None:
     logging.info(pformat(asdict(cfg)))
     run_client_only(cfg)
 

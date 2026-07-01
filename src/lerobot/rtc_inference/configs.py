@@ -19,6 +19,7 @@ import torch
 
 from lerobot.configs.types import RTCAttentionSchedule
 from lerobot.robots.config import RobotConfig
+from lerobot.vla_harness.config import HarnessConfig
 
 from .constants import (
     DEFAULT_FPS,
@@ -64,6 +65,7 @@ class PolicyServerConfig:
     obs_queue_timeout: float = field(
         default=DEFAULT_OBS_QUEUE_TIMEOUT, metadata={"help": "Timeout for observation queue in seconds"}
     )
+    harness: HarnessConfig = field(default_factory=HarnessConfig)
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -233,6 +235,10 @@ class RobotClientConfig:
         default="attention_captures",
         metadata={"help": "Server-side directory to save captured attention weights and observation images"},
     )
+    harness: HarnessConfig = field(
+        default_factory=HarnessConfig,
+        metadata={"help": "VLA harness configuration shared with server/client runtime"},
+    )
 
     @property
     def environment_dt(self) -> float:
@@ -330,4 +336,5 @@ class RobotClientConfig:
             "rtc_debug_maxlen": self.rtc_debug_maxlen,
             "inference_delay_steps": self.inference_delay_steps,
             "xvla_domain_id": self.xvla_domain_id,
+            "harness": self.harness,
         }

@@ -170,6 +170,10 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
 
         return services_pb2.Empty()
 
+    def SendIntervention(self, request, context):  # noqa: N802
+        """Async stack does not use runtime harness interventions yet."""
+        return services_pb2.Empty()
+
     def SendObservations(self, request_iterator, context):  # noqa: N802
         """Receive observations from the robot client"""
         client_id = context.peer()

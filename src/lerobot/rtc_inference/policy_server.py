@@ -53,6 +53,12 @@ from lerobot.transport import (
 )
 from lerobot.transport.utils import receive_bytes_in_chunks
 from lerobot.types import PolicyAction
+from lerobot.vla_harness import (
+    HarnessMessageCodec,
+    PolicyMetadata,
+    ServerHarnessController,
+    load_harness_profile,
+)
 
 from .configs import PolicyServerConfig
 from .constants import SUPPORTED_POLICIES
@@ -171,6 +177,8 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         self.record_action_enable = False
         self.record_action_dir = "recorded_obs"
         self._action_trace_writer: AsyncJsonlWriter | None = None
+        self.harness_controller: ServerHarnessController | None = None
+        self.harness_profile_path: str | None = None
 
         # RTC state (optional)
         self.rtc_enabled = False
@@ -254,6 +262,12 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         with self._obs_audit_lock:
             self._last_obs_receive_perf = None
             self._obs_receive_seq = 0
+
+        if self.harness_controller is not None:
+            self.harness_controller.runtime = self.harness_controller.runtime.__class__()
+            self.harness_controller.ledger = self.harness_controller.ledger.__class__()
+            if self.harness_controller.rescue_planner is not None:
+                self.harness_controller.rescue_planner.reset_episode()
 
     def _setup_action_recording(self, record_dir: str) -> None:
         root = Path(record_dir)
@@ -349,6 +363,8 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
             self._close_action_recording()
         self.capture_attn_enable = bool(getattr(policy_specs, "capture_attn_enable", False))
         self.capture_attn_dir = str(getattr(policy_specs, "capture_attn_dir", "attention_captures"))
+        harness_cfg = getattr(policy_specs, "harness_config", self.config.harness)
+        self.harness_profile_path = getattr(harness_cfg, "profile_path", None)
         self._attn_timestep = 0
         if self.capture_attn_enable:
             Path(self.capture_attn_dir).mkdir(parents=True, exist_ok=True)
@@ -432,7 +448,39 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
             "jpeg" if self.image_compress_enable else "raw",
             self.image_compress_quality,
         )
+        if getattr(harness_cfg, "enable", False) and self.harness_profile_path:
+            bundle = load_harness_profile(self.harness_profile_path)
+            trace_path = None
+            if harness_cfg.trace.enable:
+                trace_path = str(Path(harness_cfg.log_dir) / "server_trace.jsonl")
+            if self.harness_controller is not None:
+                self.harness_controller.close()
+            self.harness_controller = ServerHarnessController(harness_cfg, bundle, trace_path=trace_path)
+            self.logger.info("Server harness enabled | profile=%s", self.harness_profile_path)
+        elif self.harness_controller is not None:
+            self.harness_controller.close()
+            self.harness_controller = None
 
+        return services_pb2.Empty()
+
+    def SendIntervention(self, request, context):  # noqa: N802
+        if self.harness_controller is None:
+            return services_pb2.Empty()
+
+        event = HarnessMessageCodec.decode_intervention(request.data)
+        self.harness_controller.register_intervention(event)
+        flush_required = self.harness_controller.flush.intervention_requires_flush(event)
+        if flush_required:
+            if self.rtc_action_queue is not None:
+                self.rtc_action_queue.clear()
+            self.observation_queue = Queue(maxsize=1)
+            self.last_processed_obs = None
+        self.logger.warning(
+            "Received client intervention | chunk_id=%s | severity=%s | reason=%s",
+            event.chunk_id,
+            event.severity,
+            event.reason,
+        )
         return services_pb2.Empty()
 
     def SendObservations(self, request_iterator, context):  # noqa: N802
@@ -891,6 +939,7 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
             self.policy_image_features,
             rename_map=self.rename_map,
         )
+        current_state_np = np.asarray(observation["observation.state"].squeeze(0).detach().cpu(), dtype=np.float64)
         prepare_time = time.perf_counter() - start_prepare
 
         """2. Apply preprocessor"""
@@ -921,6 +970,7 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
                     raw_action_tensor = self._get_action_chunk(observation)
         else:
             raw_action_tensor = self._get_action_chunk(observation)
+        model_raw_action_tensor = raw_action_tensor.clone().detach()
         inference_time = time.perf_counter() - start_inference
         self.logger.info(
             f"Preprocessing and inference took {inference_time:.4f}s, action shape: {raw_action_tensor.shape}"
@@ -948,6 +998,13 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         processed_action_tensor = torch.stack(processed_actions, dim=1).squeeze(0).detach().cpu()
         self.logger.debug(f"Postprocessed action shape: {processed_action_tensor.shape}")
 
+        rescue_metadata = None
+        if self.harness_controller is not None:
+            rescue_snippet, rescue_metadata = self.harness_controller.maybe_replace_with_rescue(current_state_np)
+            if rescue_snippet is not None:
+                processed_action_tensor = torch.as_tensor(rescue_snippet, dtype=processed_action_tensor.dtype)
+                raw_action_tensor = processed_action_tensor.unsqueeze(0)
+
         rtc_real_delay = None
         rtc_action_index_before_inference = self._rtc_action_index_before_inference
         if self.rtc_enabled and self.rtc_action_queue is not None:
@@ -967,6 +1024,23 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         else:
             action_tensor = processed_action_tensor
 
+        envelope = None
+        invariant_violations = []
+        envelope_violations = []
+        if self.harness_controller is not None:
+            policy_metadata = PolicyMetadata(
+                policy_id=str(self.policy_type),
+                policy_revision=getattr(self.policy, "name_or_path", None),
+                profile_id=self.harness_profile_path,
+            )
+            action_tensor_np, envelope, invariant_violations, envelope_violations = self.harness_controller.build_envelope(
+                current_state=current_state_np,
+                action_chunk=np.asarray(action_tensor, dtype=np.float64),
+                timestamp=observation_t.get_timestamp(),
+                policy_metadata=policy_metadata,
+            )
+            action_tensor = torch.as_tensor(action_tensor_np, dtype=processed_action_tensor.dtype)
+
         """5. Convert to TimedAction list"""
         action_metas = [
             {
@@ -976,6 +1050,11 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
                 "rtc_enabled": self.rtc_enabled,
                 "rtc_real_delay": rtc_real_delay,
                 "rtc_action_index_before_inference": rtc_action_index_before_inference,
+                "chunk_id": envelope.chunk_id if envelope is not None else None,
+                "inference_id": envelope.inference_id if envelope is not None else None,
+                "policy_metadata": asdict(envelope.policy_metadata) if envelope is not None else {},
+                "harness_decision": asdict(envelope.harness_decision) if envelope is not None else {},
+                "rescue_metadata": rescue_metadata or {},
             }
             for i in range(len(action_tensor))
         ]
@@ -1002,9 +1081,14 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
                 "rtc_enabled": self.rtc_enabled,
                 "rtc_real_delay": rtc_real_delay,
                 "rtc_action_index_before_inference": rtc_action_index_before_inference,
-                "raw_action_norm": to_jsonable(raw_action_tensor.squeeze(0).detach().cpu()),
+                "raw_action_norm": to_jsonable(model_raw_action_tensor.squeeze(0).detach().cpu()),
                 "postprocessed_action": to_jsonable(processed_action_tensor),
                 "sent_action": to_jsonable(action_tensor),
+                "chunk_id": envelope.chunk_id if envelope is not None else None,
+                "inference_id": envelope.inference_id if envelope is not None else None,
+                "harness_decision": asdict(envelope.harness_decision) if envelope is not None else {},
+                "invariant_violations": [asdict(item) for item in invariant_violations],
+                "envelope_violations": [asdict(item) for item in envelope_violations],
             },
         )
 
@@ -1028,6 +1112,8 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         """Stop the server"""
         self._reset_server()
         self._close_action_recording()
+        if self.harness_controller is not None:
+            self.harness_controller.close()
         self._audit_interarrival.close()
         self._audit_queue_latency.close()
         self.logger.info("Server stopping...")

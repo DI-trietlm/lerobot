@@ -1,380 +1,549 @@
-## VLA Harness For Reliable SO-ARM Deployment
+# VLA Harness For Reliable SO-ARM Deployment
 
-Tài liệu này cập nhật lại ý tưởng VLA Harness theo đúng các lỗi hiện tại của bài toán pouring:
+Tài liệu này mô tả hướng triển khai VLA Harness sau các chẩn đoán mới nhất trên
+task pouring. Kết luận quan trọng đã thay đổi:
 
-- cùng checkpoint/model có run thành công, run đi lệch/quá cốc, run đi dần về vùng safe pose;
-- offline single-frame probe không tái hiện rõ safe-pull hoặc overshoot;
-- raw model và policy loss không đủ để dự đoán hành vi closed-loop ngoài đời;
-- cần một lớp runtime supervisor để phát hiện, chặn, recover, và log lỗi.
+- "Gần safe/folded pose" không luôn là lỗi. Trong demonstration, nhiều episode
+  hợp lệ đi qua một waypoint folded/safe-like trước khi approach và grasp.
+- Lỗi chính giống mất phase progression hơn là "model homing về safe pose":
+  VLA đi vào vùng pre-grasp/folded hợp lệ nhưng đôi khi không thoát tiếp sang
+  approach/grasp/pour.
+- Vì vậy harness không nên hard-code "cấm về safe pose". Harness nên can thiệp
+  nhỏ, data-derived, và giữ VLA làm controller chính.
+
+Mục tiêu: khi VLA rơi vào điểm chết, harness chỉ cần tạo một micro-adjustment
+nằm trong phân phối demonstration để VLA thoát basin, sau đó trả quyền lại cho
+VLA.
 
 ---
 
-### 1. Bài học chính từ các chẩn đoán hiện tại
+## 1. Nguyên tắc thiết kế
 
-**Không nên hiểu lỗi hiện tại là một bug đơn giản.**
+### 1.1 Harness không thay VLA
 
-Các notebook/offline probe cho thấy:
+Harness không phải planner cổ điển. Harness chỉ làm ba việc:
 
-- Dataset frame probe không chứng minh raw policy luôn kéo về safe pose.
-- Safe-pull rate trong phase sweep gần như bằng 0, chỉ có vài điểm nhỏ.
-- Overshoot rate theo threshold hiện tại bằng 0 trong offline sweep.
-- New model thường có first/early action gần current state hơn, và chunk speed thấp hơn old.
-- Ngoài đời vẫn có hành vi ngẫu nhiên: thành công, đi lệch/quá cốc, hoặc đi dần về safe pose.
+1. Phát hiện hành vi runtime bất thường.
+2. Chặn các action phá task rõ ràng.
+3. Can thiệp tối thiểu rồi yêu cầu VLA infer lại từ observation mới.
 
-Vì vậy lỗi nhiều khả năng nằm ở **closed-loop system**, không chỉ nằm ở model một bước:
+Happy path vẫn do VLA xử lý.
 
+### 1.2 Ưu tiên data-derived, không task-hardcode
+
+Task mới không nên phải viết lại rule kiểu `grasp`, `hold`, `release`. Thay vào
+đó, từ dataset ta mine:
+
+- mode ổn định;
+- transition giữa mode;
+- plateau/action invariant;
+- envelope tốc độ/action;
+- đoạn micro-action giúp thoát vùng kẹt.
+
+Với pouring, các mode có thể tương ứng với prepare/open/hold/pour/release. Với
+task khác, tên mode không quan trọng; harness chỉ dùng mode id và invariant đã
+mine từ data.
+
+### 1.3 Mọi can thiệp đáng kể phải flush/re-infer
+
+Đây là requirement cứng.
+
+Nếu harness sửa action đang execute nhưng server/policy vẫn tin chunk cũ được
+thực thi nguyên vẹn, vòng lặp sẽ bị bất đồng bộ:
+
+```text
+policy planned action A
+      ↓
+harness executes modified action A'
+      ↓
+next observation comes from A'
+      ↓
+policy/aggregator/RTC may still carry assumptions from A
 ```
-camera/runtime obs
-      ↓
-policy raw action chunk
-      ↓
-aggregation / queue / receding horizon
-      ↓
-RTC / safety constraint
-      ↓
-robot dynamics
-      ↓
-new observation
-      ↓
-...
+
+Vì vậy sau các can thiệp sau, phải clear hoặc invalidate action queue/chunk và
+yêu cầu inference lại từ observation mới:
+
+- reject chunk;
+- micro-rescue;
+- hard clamp gripper/actuator;
+- nhiều lần speed clamp liên tiếp;
+- stop/hold safety intervention.
+
+Can thiệp nhẹ trong 1-2 frame có thể chỉ log, nhưng nếu state thực tế bị đổi
+khác đáng kể so với action VLA định execute thì phải flush.
+
+---
+
+## 2. Bốn harness cần thiết kế
+
+### Harness 1: Dataset-Manifold Micro-Rescue
+
+Mục tiêu: giúp VLA thoát điểm chết bằng action ngắn lấy từ chính phân phối
+dataset đã train.
+
+Trigger tổng quát:
+
+- current state không tiến triển trong nhiều step;
+- nhiều chunk liên tiếp có endpoint gần current state;
+- chunk đổi hướng qua lại nhưng state không ra khỏi vùng cũ;
+- robot re-enter một vùng state quen thuộc quá lâu;
+- progress proxy không tăng dù action vẫn được gửi.
+
+Offline profile cần build từ dataset:
+
+- index state/action theo episode và frame;
+- embedding gần nhất theo joint state, optional image embedding;
+- score "future progress" cho mỗi frame, ví dụ sau `0.5-1.5s` state có rời
+  vùng hiện tại và đi tới mode kế tiếp không;
+- action snippets ngắn từ các neighbor có progress tốt.
+
+Runtime:
+
+1. Khi stuck, tìm `k` neighbor gần current state.
+2. Lọc neighbor có future progress tốt.
+3. Chọn micro-snippet 3-10 action step.
+4. Execute bounded/blended rescue.
+5. Flush queue/chunk.
+6. Re-infer VLA từ observation mới.
+
+Ràng buộc:
+
+- horizon ngắn, thường `0.3-1.0s`;
+- không replay cả episode;
+- không dùng snippet nếu state hiện tại OOD so với mọi neighbor;
+- log đầy đủ neighbor id, episode/frame source, score, action được execute.
+
+Với pouring, rescue này có thể giúp thoát vùng folded/pre-grasp để tiếp tục
+open/approach. Với task mới, chỉ cần dataset mới.
+
+---
+
+### Harness 2: Data-Derived Invariant Guard
+
+Mục tiêu: chặn các action phá task rõ ràng, được chứng minh hiếm/không xuất
+hiện trong dataset.
+
+Không hard-code "gripper sau grasp". Ta mine invariant tổng quát:
+
+- **Plateau invariant**: sau khi vào một mode ổn định, rời mode quá sớm là bất
+  thường.
+- **No-backtrack invariant**: transition `M_i -> M_j` gần như không quay ngược.
+- **One-shot event invariant**: một excursion lớn chỉ xảy ra một lần hoặc theo
+  thứ tự ổn định.
+- **Value envelope invariant**: action/state trong mode nằm trong percentile
+  `[p01, p99]`.
+- **Velocity envelope invariant**: speed/acceleration không vượt envelope demo.
+
+Offline mining:
+
+1. Với từng action/state dimension, detect plateau, transition, excursion.
+2. Cluster recent-history features thành mode `M0, M1, ...`.
+3. Học transition graph và duration distribution.
+4. Chỉ promote invariant nếu support cao:
+   - xuất hiện trong >= 95% episode;
+   - violation train <= 1-2%;
+   - mode confidence đủ cao;
+   - invariant có hậu quả task rõ ràng nếu bị phá.
+
+Runtime:
+
+1. Estimate current mode từ recent state/action history.
+2. Kiểm tra chunk sắp execute có vi phạm invariant không.
+3. Vi phạm nhẹ: warn/log hoặc soft clamp.
+4. Vi phạm nặng/catastrophic: reject/clamp, flush queue, re-infer.
+
+Ví dụ pouring:
+
+- Dataset cho thấy sau khi vào mode giữ cốc, việc mở gripper trước pour/release
+  gần như không xảy ra.
+- Harness không cần biết tên "grasp"; nó chỉ biết dimension đó đang ở stable
+  mode và action sắp rời mode quá sớm.
+
+Giảm rủi ro:
+
+- bật guard cứng chỉ cho invariant confidence cao;
+- ban đầu chạy shadow mode để đo false positive trên runtime logs;
+- mọi clamp đáng kể phải flush/re-infer.
+
+---
+
+### Harness 3: Action Stability And Speed Envelope Guard
+
+Mục tiêu: chặn spike/action ngoài phân phối, nhưng không biến speed clamp thành
+controller chính.
+
+Signals:
+
+- action velocity theo từng dimension;
+- action acceleration/jerk;
+- endpoint jump so với current state;
+- disagreement giữa các chunk liên tiếp;
+- tracking error giữa commanded và actual state.
+
+Offline profile:
+
+- percentile speed/acceleration theo toàn dataset;
+- percentile theo mode nếu có mode profile;
+- normal chunk-to-chunk direction consistency;
+- action bounds theo dimension.
+
+Runtime policy:
+
+- clamp spike rõ ràng vượt envelope;
+- reject chunk nếu endpoint/action path OOD;
+- nếu phải clamp nhiều lần liên tiếp, coi đó là failure, không tiếp tục clamp
+  âm thầm;
+- sau repeated clamp: flush queue và gọi micro-rescue hoặc re-infer.
+
+Quan điểm ưu tiên:
+
+- Speed guard là safety envelope, không phải behavior shaper.
+- Dùng để chặn outlier, không dùng để "lái" robot từng frame.
+- Với các task nhạy cảm như cầm cốc, gripper invariant quan trọng hơn speed
+  clamp.
+
+---
+
+### Harness 4: Runtime Synchronization, Re-Infer, And Trace Harness
+
+Mục tiêu: biến mọi can thiệp thành một state transition có thể giải thích, không
+để policy/queue/RTC chạy tiếp trên giả định cũ.
+
+Thành phần:
+
+1. **Intervention ledger**
+   - Log mọi lần reject, clamp, rescue, stop.
+   - Lưu reason, metric, action gốc, action thực thi, mode estimate.
+
+2. **Queue/chunk invalidation**
+   - Sau can thiệp mạnh, clear action queue.
+   - Bỏ các chunk cũ đang pending.
+   - Reset aggregation state nếu aggregation dùng lịch sử chunk.
+
+3. **Re-infer coordinator**
+   - Chụp observation mới sau can thiệp.
+   - Gửi server infer lại.
+   - Không dùng tiếp chunk đã bị sửa nhiều.
+
+4. **Runtime trace pack**
+   - Lưu đủ dữ liệu để debug offline:
+     - timestamp;
+     - current state;
+     - raw chunk;
+     - postprocessed chunk;
+     - aggregated/RTC action;
+     - executed action;
+     - actual state sau execute;
+     - intervention flag;
+     - mode estimate;
+     - dataset neighbor nếu có rescue;
+     - camera frame key/path.
+
+Requirement:
+
+- Mỗi episode infer phải tái dựng được timeline "policy muốn gì, harness sửa gì,
+  robot thực thi gì, observation sau đó là gì".
+- Nếu không tái dựng được, harness đang làm hệ khó debug hơn và phải sửa logging
+  trước khi thêm guard mới.
+
+---
+
+## 3. Offline profile cho task mới
+
+Task mới cần chạy một profiler trên dataset:
+
+```text
+dataset
+  -> state/action arrays
+  -> mode discovery
+  -> invariant mining
+  -> speed/action envelope
+  -> nearest-neighbor rescue index
+  -> harness_profile.json
 ```
 
-Harness phải quan sát cả vòng lặp này, không chỉ nhìn output model một lần.
+`harness_profile.json` nên chứa:
+
+- schema state/action dimension;
+- fps;
+- normalization/scales;
+- mode centroids hoặc classifier nhẹ;
+- transition graph;
+- duration distribution;
+- high-confidence invariants;
+- speed/action envelopes;
+- ANN index metadata cho micro-rescue;
+- thresholds đã calibrate từ dataset.
+
+Không nên chứa:
+
+- rule task-specific viết tay nếu có thể mine từ data;
+- waypoint cố định nếu không cần;
+- tên phase phụ thuộc pouring, trừ khi chỉ để debug/report.
 
 ---
 
-### 2. Phân biệt start pose và safe pose
+## 4. Runtime flow
 
-Hai khái niệm này phải được tách rõ trong mọi log và metric.
-
-| Khái niệm | Ý nghĩa |
-|---|---|
-| `start_pose` | Joint state tại thời điểm bắt đầu một run/eval. Do người dùng reset robot trước khi infer. |
-| `safe_pose` | Pose an toàn cố định/chuẩn để robot quay về hoặc tránh va chạm. Không nhất thiết trùng start pose. |
-
-Lỗi ngoài đời đang mô tả là: robot **đi dần về gần safe pose trong một số run**.
-
-Để phân biệt với việc chỉ loanh quanh start pose, runtime phải log:
-
-- `dist(current_state_t, start_pose)`
-- `dist(current_state_t, safe_pose)`
-- `dist(raw_action_t, start_pose)`
-- `dist(raw_action_t, safe_pose)`
-- `dist(executed_action_t, start_pose)`
-- `dist(executed_action_t, safe_pose)`
-
-Nếu `dist(current_state, safe_pose)` giảm trong khi `dist(current_state, start_pose)` tăng, đó mới là safe-pose drift thật.
-
----
-
-### 3. Vì sao raw VLA chưa đủ để deploy
-
-VLA/policy hiện có thể xử lý happy path, nhưng deployment thật cần thêm guardrail vì:
-
-- một chunk xấu có thể đẩy robot vào state ngoài distribution;
-- receding horizon có thể liên tục thay chunk trước khi phần hữu ích được execute;
-- aggregation nhiều chunk không thống nhất có thể triệt tiêu action;
-- camera/view thay đổi sau vài timestep có thể làm policy đổi mode;
-- RTC không tự sinh safe pose, nhưng có thể làm action bị giữ quá gần current nếu raw chunk không đủ nhất quán;
-- loss/offline frame probe không phản ánh đầy đủ hệ kín ngoài đời.
-
-Điểm quan trọng: Harness không cần biết chính xác model sai vì đâu mới có ích. Nó cần phát hiện **trajectory/runtime bất thường** đủ sớm để chặn và recover.
-
----
-
-### 4. Kiến trúc mới: runtime supervisor, không chỉ stuck detector
-
-Phiên bản cũ dùng ý tưởng `2s no-movement`. Với lỗi hiện tại, trigger đúng hơn là:
-
-**no-progress / unsafe-progress / invalid-chunk**
-
-Harness gồm 4 lớp:
-
-1. **Pre-execution validator**
-   - Kiểm tra action chunk trước khi gửi xuống robot.
-   - Chặn chunk có dấu hiệu kéo về safe pose, đứng quá gần current, hoặc đi ra ngoài vùng thao tác.
-
-2. **Progress monitor**
-   - Quan sát robot sau mỗi 0.5-1s.
-   - Kiểm tra task có tiến triển thật không, thay vì chỉ kiểm tra robot có di chuyển không.
-
-3. **Minimal recovery primitives**
-   - Can thiệp nhỏ, có mục tiêu rõ, rồi trả control lại VLA.
-   - Không biến harness thành planner toàn nhiệm vụ.
-
-4. **Full runtime logging**
-   - Lưu đủ raw/aggregated/executed action và state để chẩn đoán sau mỗi run.
-
-```
-Observation
+```text
+observation_t
     ↓
-VLA predicts action chunk
+VLA predicts chunk
     ↓
-[Pre-execution validator]
-    ├─ valid → execute through aggregator/RTC
-    └─ invalid → reject/resample/recover/stop
+mode estimate + progress estimate
     ↓
-[Progress monitor]
-    ├─ task progress OK → continue VLA
-    └─ no-progress / safe-drift / bad approach → classify failure
-           ↓
-     minimal recovery primitive
-           ↓
-      return control to VLA
+[Invariant Guard]
+    ├─ catastrophic violation -> clamp/reject -> flush -> re-infer
+    └─ pass
+    ↓
+[Speed/Envelope Guard]
+    ├─ OOD spike -> clamp/reject
+    ├─ repeated clamp -> flush -> micro-rescue/re-infer
+    └─ pass
+    ↓
+execute action through existing stack
+    ↓
+[Progress/Stuck Monitor]
+    ├─ OK -> continue
+    └─ stuck -> Dataset-Manifold Micro-Rescue
+                  ↓
+                flush queue/chunk
+                  ↓
+                re-infer from fresh observation
 ```
 
 ---
 
-### 5. Signals harness nên theo dõi
+## 4.5 Hybrid server/client architecture
 
-#### 5.1 Action-space signals
+Harness nên chạy theo kiến trúc hybrid:
 
-Các metric từ action chunk:
+- **Server quyết định thông minh**: validate chunk, mine/use data-derived
+  invariants, chọn micro-rescue, reject/resample, và điều phối re-infer.
+- **Client quyết định an toàn cuối cùng**: chặn action trước robot, quản lý
+  local queue/RTC/interpolation, theo dõi state thật, và emergency stop.
 
-- `dist(raw_first_action, current_state)`
-- `dist(raw_chunk_mean, current_state)`
-- `dist(raw_chunk_end, current_state)`
-- `dist(raw_first_action, safe_pose)`
-- `dist(raw_chunk_end, safe_pose)`
-- `chunk_mean_speed`
-- direction consistency giữa các chunk liên tiếp
-- action jerk / sudden reversal
+### Server-side responsibilities
 
-Các dấu hiệu đáng chặn:
+Server phù hợp cho các phần cần nhìn policy/model đầy đủ:
 
-- chunk kéo về safe pose khi task chưa cần;
-- nhiều chunk liên tiếp gần current state nhưng task không tiến triển;
-- chunk đổi hướng mạnh giữa các inference step;
-- endpoint đi ra ngoài workspace hoặc vùng cốc;
-- action speed quá thấp trong khi policy đang được kỳ vọng approach.
+- pre-execution chunk validator;
+- data-derived invariant check ở mức raw/postprocessed chunk;
+- dataset-manifold micro-rescue proposal;
+- reject/resample chunk;
+- re-infer coordinator;
+- raw chunk, postprocessed chunk, mode estimate, violation reason logging.
 
-#### 5.2 State/runtime signals
+Ưu điểm:
 
-Các metric từ robot state:
+- thấy action chunk đầy đủ trước khi execute;
+- gần model/preprocessor/postprocessor;
+- dễ chạy nearest-neighbor/mode classifier nặng;
+- dễ invalidate chunk và infer lại.
 
-- `dist(current_state, start_pose)`
-- `dist(current_state, safe_pose)`
-- actual-vs-commanded tracking error
-- end-effector movement nếu có forward kinematics
-- thời gian ở cùng một vùng state
-- có đang đi ra khỏi workspace thao tác không
+Giới hạn:
 
-Các dấu hiệu đáng chặn:
+- không phải safety layer cuối vì không nằm cạnh robot;
+- không luôn thấy action cuối cùng sau RTC/client guard;
+- can thiệp phụ thuộc network latency.
 
-- current state tiến gần safe pose qua nhiều timestep dù task chưa xong;
-- current state không rời vùng start/approach sau ngưỡng thời gian;
-- robot đi lệch xa hướng tới cốc;
-- commanded action và actual state không khớp, gợi ý latency/controller issue.
+### Client-side responsibilities
 
-#### 5.3 Vision/task progress signals
+Client phù hợp cho các phần phải phản ứng ngay tại robot:
 
-Với pouring task:
+- final execution guard;
+- gripper/actuator hard invariant guard;
+- speed/acceleration safety envelope;
+- tracking-error monitor;
+- local queue/RTC/interpolation clear;
+- emergency stop/hold;
+- executed-action và actual-state logging.
 
-- orange cup có nằm trong vùng approach/grasp hợp lý không;
-- khoảng cách image-space tới cup có giảm không;
-- wrist camera có thấy cốc/object không;
-- gripper/object relation có hợp lý không;
-- sau khi grasp, cup có lift/tilt đúng phase không.
+Ưu điểm:
 
-Ban đầu không cần pose estimation hoàn hảo. Chỉ cần progress proxy đủ tốt để phát hiện “đang đi sai”.
+- thấy state thật và action thật sự được execute;
+- phản ứng không phụ thuộc round-trip server;
+- là safety fallback cuối cùng.
 
----
+Giới hạn:
 
-### 6. Failure modes hiện tại và cách harness xử lý
+- không nên chạy logic data-manifold nặng;
+- nếu tự sửa action mà server không biết sẽ gây bất đồng bộ;
+- phải có protocol báo server flush/re-infer.
 
-| Failure mode | Dấu hiệu | Cách xử lý tối thiểu |
-|---|---|---|
-| Safe-pose drift | `dist(current_state, safe_pose)` giảm liên tục, task chưa xong | reject chunk, stop hoặc nudge về vùng thao tác |
-| Start/current dwell | nhiều timestep gần start/current, progress thấp | start-pose escape / approach nudge |
-| Bad approach / đi lệch cốc | EE/camera progress không hướng tới cup | resample chunk hoặc CV-guided pre-grasp |
-| Chunk inconsistency | chunk liên tiếp đổi hướng mạnh | lower horizon, resample, hoặc dùng median/guarded aggregation |
-| Grasp fail | tới gần cốc nhưng không grasp/lift được | re-grasp primitive |
-| Runtime tracking fail | executed state không theo command | pause, reduce speed, reset queue |
+### Synchronization protocol
 
----
+Mỗi chunk/action cần có `chunk_id`.
 
-### 7. MVP cho bài toán hiện tại
+```text
+server -> client:
+    chunk_id, action_chunk, policy_metadata
 
-MVP không nên bắt đầu bằng full planner. Nên làm 3 phần nhỏ nhưng có giá trị ngay.
+client:
+    execute normally
+    or intervene locally
 
-#### MVP 1: Runtime logger
+if client intervenes:
+    client clears local queue/RTC pending actions
+    client sends intervention_event(chunk_id, reason, executed_action, current_state)
+    server invalidates chunk/context
+    server requests fresh observation
+    server re-infers
+```
 
-Mỗi inference step lưu:
+Requirement:
 
-- timestamp;
-- camera frame key hoặc path;
-- `current_state`;
-- `start_pose`;
-- `safe_pose`;
-- raw policy chunk;
-- aggregated action;
-- RTC/executed action;
-- actual state sau execute;
-- các metric distance tới start/safe/current.
+- Mọi can thiệp đáng kể ở client phải trigger `flush/re-infer` ở server.
+- Server không được tiếp tục aggregate/reuse chunk đã bị client sửa mạnh.
+- Trace phải lưu được cả action gốc và action đã thực thi.
 
-Mục tiêu: phân biệt lỗi model raw, aggregation, RTC, hay robot dynamics.
+Kết luận kiến trúc:
 
-#### MVP 2: Pre-execution chunk validator
-
-Trước khi execute chunk:
-
-- reject nếu chunk endpoint tiến gần safe pose bất thường;
-- reject nếu chunk nằm quá gần current state quá nhiều lần liên tiếp mà task chưa progress;
-- reject nếu chunk ra ngoài workspace/pose bounds;
-- log lý do reject.
-
-Action khi reject:
-
-- resample một lần;
-- nếu vẫn fail, dùng recovery primitive hoặc stop.
-
-#### MVP 3: Progress monitor cho pouring
-
-Trong 1-2s đầu:
-
-- robot phải rời start theo hướng hợp lý;
-- image/camera phải cho thấy cup/object relation tiến triển;
-- không được drift về safe pose nếu task chưa xong.
-
-Nếu fail:
-
-- chạy approach nudge tới pre-grasp vùng cốc;
-- trả control lại VLA.
+**Server-side harness làm reasoning/model-aware guard. Client-side harness làm
+safety/execution guard. Hai bên nối với nhau bằng intervention event và
+flush/re-infer protocol.**
 
 ---
 
-### 8. Recovery primitives nên có
+## 5. Áp dụng cho pouring hiện tại
 
-Các primitive phải nhỏ, bounded, và dễ rollback.
+Chẩn đoán mới:
 
-1. **Stop / hold**
-   - Dừng an toàn, clear action queue.
+- Nhiều demonstration đi qua vùng folded/safe-like trước khi approach.
+- Do đó không được cấm tuyệt đối chuyển động về safe-like pose.
+- Failure hiện tại giống kẹt ở pre-grasp/folded waypoint hoặc re-enter waypoint
+  đó, thay vì chuyển tiếp sang open/approach/grasp.
 
-2. **Resample chunk**
-   - Gọi policy lại với same/latest observation nếu chunk bị validator reject.
+Harness ưu tiên:
 
-3. **Approach nudge**
-   - Dịch robot một đoạn nhỏ về vùng thao tác/cốc.
-   - Có thể dựa vào CV đơn giản hoặc waypoint đã calibrate.
+1. **Micro-rescue** khi robot ở folded/pre-grasp quá lâu mà không mở/approach.
+2. **Invariant gripper learned from data**: sau khi mode giữ cốc được detect,
+   action mở gripper bất thường phải bị chặn.
+3. **Speed/envelope guard** chỉ để chặn spike hoặc action OOD.
+4. **Flush/re-infer** sau mọi rescue/clamp gripper/reject chunk.
 
-4. **Pre-grasp alignment**
-   - Đưa wrist/EE vào vùng trước cốc, không tự hoàn thành toàn task.
+Điều không nên làm:
 
-5. **Re-grasp**
-   - Nếu đã tới gần cốc nhưng grasp fail, mở/đóng lại gripper với pose chỉnh nhỏ.
-
-6. **Safe stop**
-   - Nếu nhiều lần reject/recovery fail, dừng thay vì cố tiếp.
-
----
-
-### 9. Relation với model/data work
-
-Harness không thay thế model tốt.
-
-Model vẫn cần:
-
-- kiểm tra config train thực tế;
-- checkpoint sweep;
-- ablation dataset theo bucket/phase;
-- kiểm tra processor/preprocessor đúng giữa train/infer;
-- phân tích recorded_obs thật.
-
-Nhưng harness giúp deployment ngay cả khi model chưa hoàn hảo:
-
-- chặn chunk xấu;
-- phát hiện drift sớm;
-- recover tối thiểu;
-- cung cấp log đủ để sửa model/data sau đó.
-
-Nói cách khác:
-
-**model improvement làm happy path tốt hơn; harness làm failure path không phá robot/run.**
+- Không hard-code "gần safe pose là lỗi".
+- Không xóa folded/safe-like segments khỏi dataset chỉ vì chúng gần safe.
+- Không clamp tốc độ liên tục để ép robot đi theo ý harness.
+- Không sửa gripper giữa chunk rồi tiếp tục dùng chunk cũ như chưa có gì xảy ra.
 
 ---
 
-### 10. Khác biệt với pipeline CV/controller truyền thống
+## 6. MVP đề xuất
 
-| Pipeline truyền thống | VLA harness |
-|---|---|
-| CV/controller làm toàn bộ task | VLA vẫn làm happy path |
-| Phải hand-code task logic chi tiết | Harness chỉ validate/recover failure |
-| Thêm task mới thường rewrite planner | Thêm task mới fine-tune VLA, reuse nhiều guardrail |
-| Predictable nhưng cứng | Flexible nhưng cần runtime supervision |
+### MVP A: Harness Profile Miner
 
-Harness không phải là quay về classical robotics hoàn toàn. Nó là lớp **exception handling** quanh VLA.
+Input: LeRobot dataset.
 
----
+Output: `harness_profile.json`.
 
-### 11. Đánh giá khả thi
+Tối thiểu:
 
-| Component | Khả thi | Ghi chú |
-|---|---|---|
-| Runtime logger | Rất cao | Cần làm trước mọi thứ khác |
-| Distance-to-start/safe metrics | Rất cao | Joint-space metric đủ cho vòng đầu |
-| Pre-execution validator | Cao | Có thể bắt đầu bằng rule-based threshold |
-| Progress monitor | Trung bình cao | Cần định nghĩa proxy cho pouring |
-| Approach nudge | Trung bình | Cần calibration hoặc CV đơn giản |
-| Re-grasp primitive | Trung bình | Có thể làm sau khi approach ổn |
-| Full CV fallback target | Trung bình thấp | Dễ vướng occlusion/pose estimation |
+- state/action arrays;
+- robust dimension scales;
+- speed/action percentile envelopes;
+- plateau/transition candidates;
+- nearest-neighbor index for state-only micro-rescue;
+- dataset frame future-progress score.
 
-Rủi ro lớn nhất:
+### MVP B: Shadow Runtime Monitor
 
-- false positive làm reject chunk tốt;
-- recovery action đưa robot vào state còn tệ hơn;
-- latency/logging làm loop chậm;
-- threshold tune trên quá ít run.
+Chạy song song, chưa can thiệp.
 
----
+Log:
 
-### 12. Roadmap đề xuất
+- predicted violation;
+- mode estimate;
+- stuck score;
+- suggested rescue neighbor;
+- would-flush reason.
 
-#### Phase 0: Instrumentation
+Mục tiêu: đo false positive trên real runs.
 
-- Log raw chunk, aggregated action, RTC/executed action, current state.
-- Plot theo thời gian:
-  - distance to start pose;
-  - distance to safe pose;
-  - raw vs executed action;
-  - task progress proxy.
+### MVP C: Gripper/Actuator Invariant Guard
 
-#### Phase 1: Offline replay
+Bật guard cứng chỉ cho invariant confidence cao và hậu quả nặng.
 
-- Replay `recorded_obs` từ các run fail.
-- Xác định safe-drift nằm ở raw policy hay sau aggregation/RTC.
-- So run thành công vs run fail.
+Với pouring:
 
-#### Phase 2: Guarded inference
+- nếu đã vào hold-like mode, không cho mở gripper bất thường;
+- nếu guard can thiệp, flush chunk và re-infer.
 
-- Thêm pre-execution validator.
-- Chỉ log/reject, chưa recovery phức tạp.
-- Test threshold bằng recorded logs.
+### MVP D: Micro-Rescue
 
-#### Phase 3: Minimal recovery
+Khi stuck:
 
-- Add stop/hold.
-- Add resample chunk.
-- Add approach nudge.
+- chọn snippet ngắn từ neighbor có future progress;
+- execute bounded;
+- flush;
+- re-infer.
 
-#### Phase 4: Task-level recovery
-
-- Add grasp classifier.
-- Add re-grasp.
-- Add CV-guided pre-grasp nếu cần.
+MVP D phải log đủ để biết rescue có thật sự giúp hay không.
 
 ---
 
-### 13. Contribution tiềm năng
+## 7. Tiêu chí đánh giá
 
-Framing này có thể thành hướng nghiên cứu/thesis/product:
+Offline:
 
-**Reliable VLA Deployment via Runtime Supervision**
+- invariant support/violation trên train dataset;
+- rescue neighbor coverage cho các runtime stuck states;
+- false-positive rate khi replay recorded runs;
+- action OOD rate trước/sau guard.
 
-Đóng góp không nằm ở việc tạo VLA architecture mới, mà ở cách biến raw VLA thành hệ robot chạy được ngoài đời:
+Online:
 
-- action chunk validation;
-- closed-loop progress monitoring;
-- minimal recovery primitives;
-- failure logging để cải thiện model/data.
+- success rate;
+- số lần intervention mỗi run;
+- intervention nào giúp thoát stuck;
+- số lần flush/re-infer;
+- số lần guard gripper cứu khỏi làm rơi/đổ cốc;
+- latency overhead.
 
-Đây là khoảng trống thực tế: VLA có thể biết task, nhưng hệ deploy cần biết khi nào không nên tin VLA thêm một bước nữa.
+Một harness tốt không phải can thiệp nhiều. Harness tốt là:
+
+- hầu hết run happy path không bị chạm;
+- khi có điểm nghẽn, can thiệp nhỏ và đưa VLA về lại manifold;
+- mọi can thiệp đều có trace để debug model/data sau đó.
+
+---
+
+## 8. Quan hệ với data/model
+
+Harness không thay thế việc train model tốt hơn.
+
+Nhưng thứ tự hợp lý hiện tại là:
+
+1. Làm harness data-derived để deployment bớt brittle.
+2. Dùng trace harness để xác định phase/mode nào fail.
+3. Sau đó mới sửa data/model có mục tiêu:
+   - thêm demo ở transition fail;
+   - lọc outlier;
+   - train/eval với safe/stuck metrics;
+   - checkpoint selection bằng runtime replay.
+
+Với bài toán hiện tại, không nên sửa data theo cách "xóa mọi đoạn gần safe" vì
+đoạn đó là waypoint hợp lệ. Data/model work cần phase-aware hơn: model phải học
+đi qua waypoint rồi thoát khỏi nó, không kẹt ở đó.
+
+---
+
+## 9. Contribution tiềm năng
+
+Framing nghiên cứu/product:
+
+**Reliable VLA Deployment via Data-Derived Runtime Harness**
+
+Đóng góp:
+
+- mine invariants từ demonstration thay vì viết task rule thủ công;
+- dùng dataset-manifold micro-rescue để thoát điểm chết;
+- guard action stability bằng envelope học từ data;
+- đảm bảo runtime synchronization bằng flush/re-infer sau can thiệp;
+- logging đủ để biến failure online thành data/model improvement.
+
+Đây là lớp còn thiếu giữa "VLA chạy được trong nhiều trường hợp" và "robot
+đáng tin trong deployment thật".

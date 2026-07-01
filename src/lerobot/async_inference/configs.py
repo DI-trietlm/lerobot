@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 import torch
 
 from lerobot.robots.config import RobotConfig
+from lerobot.vla_harness.config import HarnessConfig
 
 from .constants import (
     DEFAULT_FPS,
@@ -63,6 +64,7 @@ class PolicyServerConfig:
     obs_queue_timeout: float = field(
         default=DEFAULT_OBS_QUEUE_TIMEOUT, metadata={"help": "Timeout for observation queue in seconds"}
     )
+    harness: HarnessConfig = field(default_factory=HarnessConfig)
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -147,6 +149,7 @@ class RobotClientConfig:
     debug_visualize_queue_size: bool = field(
         default=False, metadata={"help": "Visualize the action queue size"}
     )
+    harness: HarnessConfig = field(default_factory=HarnessConfig)
 
     @property
     def environment_dt(self) -> float:
@@ -200,4 +203,5 @@ class RobotClientConfig:
             "task": self.task,
             "debug_visualize_queue_size": self.debug_visualize_queue_size,
             "aggregate_fn_name": self.aggregate_fn_name,
+            "harness": self.harness,
         }

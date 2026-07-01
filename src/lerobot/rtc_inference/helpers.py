@@ -27,6 +27,7 @@ import numpy as np
 import torch
 
 from lerobot.configs.types import PolicyFeature, RTCAttentionSchedule
+from lerobot.vla_harness.config import HarnessConfig
 from lerobot.utils.feature_utils import build_dataset_frame, hw_to_dataset_features
 
 # NOTE: Configs need to be loaded for the client to be able to instantiate the policy config
@@ -436,8 +437,12 @@ def get_logger(name: str, log_to_file: bool = True) -> logging.Logger:
     else:
         log_file = None
 
-    # Initialize the standardized logging
-    init_logging(log_file=log_file, display_pid=False)
+    # Initialize the standardized logging. Fall back to console-only logging
+    # when the current environment cannot create log files.
+    try:
+        init_logging(log_file=log_file, display_pid=False)
+    except OSError:
+        init_logging(log_file=None, display_pid=False)
 
     # Return a named logger
     return logging.getLogger(name)
@@ -534,6 +539,7 @@ class RemotePolicyConfig:
     record_action_dir: str = "recorded_obs"
     capture_attn_enable: bool = False
     capture_attn_dir: str = "attention_captures"
+    harness_config: HarnessConfig = field(default_factory=HarnessConfig)
 
 
 def _compare_observation_states(obs1_state: torch.Tensor, obs2_state: torch.Tensor, atol: float) -> bool:

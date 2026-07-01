@@ -47,6 +47,7 @@ from typing import Any
 
 import draccus
 import grpc
+import numpy as np
 import torch
 
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
@@ -67,6 +68,7 @@ from lerobot.transport import (
 )
 from lerobot.transport.utils import grpc_channel_options, send_bytes_in_chunks
 from lerobot.utils.import_utils import register_third_party_plugins
+from lerobot.vla_harness import ClientHarnessController, HarnessMessageCodec, load_harness_profile
 
 from .configs import RobotClientConfig
 from .helpers import (
@@ -127,6 +129,7 @@ class RobotClient:
             record_action_dir=config.record_action_dir,
             capture_attn_enable=config.capture_attn_enable,
             capture_attn_dir=config.capture_attn_dir,
+            harness_config=config.harness,
         )
         self.channel = grpc.insecure_channel(
             self.server_address, grpc_channel_options(initial_backoff=f"{config.environment_dt:.4f}s")
@@ -170,6 +173,19 @@ class RobotClient:
         self._action_trace_writer: AsyncJsonlWriter | None = None
         if self.config.record_action_enable:
             self._setup_action_recording(self.config.record_action_dir)
+
+        self.harness_controller: ClientHarnessController | None = None
+        if self.config.harness.enable and self.config.harness.profile_path:
+            bundle = load_harness_profile(self.config.harness.profile_path)
+            trace_path = None
+            if self.config.harness.trace.enable:
+                trace_path = str(Path(self.config.harness.log_dir) / "client_trace.jsonl")
+            self.harness_controller = ClientHarnessController(
+                self.config.harness,
+                bundle,
+                trace_path=trace_path,
+            )
+            self.logger.info("Client harness enabled | profile=%s", self.config.harness.profile_path)
 
         self.logger.info("Robot connected and ready")
         self.logger.info(
@@ -336,6 +352,9 @@ class RobotClient:
                 f"Client action tracing stopped. Data saved to: {self._action_trace_writer.file_path.resolve()}"
             )
 
+        if self.harness_controller is not None:
+            self.harness_controller.close()
+
         self.robot.disconnect()
         self.logger.debug("Robot disconnected")
 
@@ -382,6 +401,54 @@ class RobotClient:
             timestamps = sorted([action.get_timestep() for action in self.action_queue.queue])
         self.logger.debug(f"Queue size: {queue_size}, Queue contents: {timestamps}")
         return queue_size, timestamps
+
+    def _extract_state_vector_from_raw_observation(self, raw_observation: RawObservation) -> np.ndarray | None:
+        state = raw_observation.get("observation.state")
+        if state is not None:
+            return np.asarray(state.tolist() if hasattr(state, "tolist") else state, dtype=np.float64)
+
+        ordered = []
+        for key in self.robot.action_features:
+            if key in raw_observation:
+                value = raw_observation[key]
+                ordered.append(float(value.item()) if hasattr(value, "item") else float(value))
+        if ordered:
+            return np.asarray(ordered, dtype=np.float64)
+        return None
+
+    def _clear_action_queue(self) -> None:
+        with self.action_queue_lock:
+            self.action_queue = Queue()
+        self.interpolator.reset()
+        self.must_go.set()
+
+    def _send_intervention_event(self, event) -> None:
+        try:
+            payload = HarnessMessageCodec.encode_intervention(event)
+            self.stub.SendIntervention(services_pb2.Intervention(data=payload))
+        except grpc.RpcError as exc:
+            self.logger.error("Failed to send intervention event: %s", exc)
+
+    def _handle_harness_intervention(self, event) -> None:
+        flush_required = True
+        if self.harness_controller is not None:
+            flush_required = self.harness_controller.flush.intervention_requires_flush(event)
+        if flush_required and self.config.harness.client.clear_queue_on_intervention:
+            self._clear_action_queue()
+        if event.requires_reinfer or flush_required:
+            self._send_intervention_event(event)
+        self._record_action_event(
+            "harness_intervention",
+            {
+                "event_id": event.event_id,
+                "chunk_id": event.chunk_id,
+                "inference_id": event.inference_id,
+                "severity": event.severity,
+                "reason": event.reason,
+                "current_state": event.current_state,
+                "metadata": to_jsonable(event.metadata),
+            },
+        )
 
     def _aggregate_action_queues(
         self,
@@ -461,6 +528,12 @@ class RobotClient:
                 if len(timed_actions) > 0:
                     received_device = timed_actions[0].get_action().device.type
                     self.logger.debug(f"Received actions on device: {received_device}")
+                    if self.harness_controller is not None:
+                        action_meta = timed_actions[0].get_meta()
+                        self.harness_controller.on_chunk_received(
+                            action_meta.get("chunk_id"),
+                            action_meta.get("inference_id"),
+                        )
 
                 # Move actions to client_device (e.g., for downstream planners that need GPU)
                 client_device = self.config.client_device
@@ -570,6 +643,8 @@ class RobotClient:
 
     def actions_available(self):
         """Check if there are actions available in the queue"""
+        if self.harness_controller is not None and self.harness_controller.execution_blocked:
+            return False
         with self.action_queue_lock:
             queue_has_actions = not self.action_queue.empty()
         return queue_has_actions or (not self.interpolator.needs_new_action())
@@ -580,6 +655,8 @@ class RobotClient:
 
     def control_loop_action(self, verbose: bool = False) -> dict[str, Any] | None:
         """Reading and performing actions in local queue"""
+        if self.harness_controller is not None and self.harness_controller.execution_blocked:
+            return None
 
         timed_action = None
         get_start = time.perf_counter()
@@ -600,11 +677,45 @@ class RobotClient:
         if action_tensor is None:
             return None
 
+        current_obs = self.robot.get_observation() if self.harness_controller is not None or verbose else {}
+        current_state = (
+            self._extract_state_vector_from_raw_observation(current_obs)
+            if self.harness_controller is not None
+            else None
+        )
+        intervention_event = None
+        if self.harness_controller is not None and current_state is not None:
+            adjusted_action, intervention_event, _, _ = self.harness_controller.evaluate_action(
+                current_state=current_state,
+                action=action_tensor.detach().cpu().numpy(),
+                meta=timed_action.get_meta() if timed_action is not None else {},
+            )
+            action_tensor = torch.as_tensor(
+                adjusted_action,
+                dtype=action_tensor.dtype,
+                device=action_tensor.device,
+            )
+            if intervention_event is not None and intervention_event.reason == "invariant_violation":
+                self._handle_harness_intervention(intervention_event)
+                self._record_action_event(
+                    "action_blocked",
+                    {
+                        "action_timestep": timed_action.get_timestep()
+                        if timed_action is not None
+                        else self.latest_action,
+                        "reason": intervention_event.reason,
+                        "severity": intervention_event.severity,
+                        "chunk_id": intervention_event.chunk_id,
+                        "current_state": intervention_event.current_state,
+                        "original_action": intervention_event.original_action,
+                    },
+                )
+                return None
+
         action_dict = self._action_tensor_to_action_dict(action_tensor)
 
         # Optional verbose diagnostics: compare target action vs current joint state.
         if verbose:
-            current_obs = self.robot.get_observation()
             current_positions = current_obs.get("observation.state", None)
 
             if current_positions is not None:
@@ -623,6 +734,8 @@ class RobotClient:
                 self.logger.info(f"Delta (Robot needs to move): {deltas}")
 
         _performed_action = self.robot.send_action(action_dict)
+        if intervention_event is not None:
+            self._handle_harness_intervention(intervention_event)
 
         current_queue_size = None
         with self.action_queue_lock:
@@ -687,6 +800,11 @@ class RobotClient:
 
             raw_observation: RawObservation = self.robot.get_observation()
             raw_observation["task"] = task
+            current_state = self._extract_state_vector_from_raw_observation(raw_observation)
+            if self.harness_controller is not None and current_state is not None:
+                intervention_event = self.harness_controller.observe_state(current_state)
+                if intervention_event is not None:
+                    self._handle_harness_intervention(intervention_event)
 
             transport_observation, transport_stats = encode_observation_images_for_transport(
                 raw_observation,

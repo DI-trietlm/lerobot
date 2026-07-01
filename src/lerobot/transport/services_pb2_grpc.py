@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class LearnerServiceStub:
+class LearnerServiceStub(object):
     """LearnerService: the Actor calls this to push transitions.
     The Learner implements this service.
     """
@@ -58,7 +58,7 @@ class LearnerServiceStub:
                 _registered_method=True)
 
 
-class LearnerServiceServicer:
+class LearnerServiceServicer(object):
     """LearnerService: the Actor calls this to push transitions.
     The Learner implements this service.
     """
@@ -119,7 +119,7 @@ def add_LearnerServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class LearnerService:
+class LearnerService(object):
     """LearnerService: the Actor calls this to push transitions.
     The Learner implements this service.
     """
@@ -233,7 +233,7 @@ class LearnerService:
             _registered_method=True)
 
 
-class AsyncInferenceStub:
+class AsyncInferenceStub(object):
     """AsyncInference: from Robot perspective
     Robot send observations to & executes action received from a remote Policy server
     """
@@ -259,6 +259,11 @@ class AsyncInferenceStub:
                 request_serializer=lerobot_dot_transport_dot_services__pb2.PolicySetup.SerializeToString,
                 response_deserializer=lerobot_dot_transport_dot_services__pb2.Empty.FromString,
                 _registered_method=True)
+        self.SendIntervention = channel.unary_unary(
+                '/transport.AsyncInference/SendIntervention',
+                request_serializer=lerobot_dot_transport_dot_services__pb2.Intervention.SerializeToString,
+                response_deserializer=lerobot_dot_transport_dot_services__pb2.Empty.FromString,
+                _registered_method=True)
         self.Ready = channel.unary_unary(
                 '/transport.AsyncInference/Ready',
                 request_serializer=lerobot_dot_transport_dot_services__pb2.Empty.SerializeToString,
@@ -266,7 +271,7 @@ class AsyncInferenceStub:
                 _registered_method=True)
 
 
-class AsyncInferenceServicer:
+class AsyncInferenceServicer(object):
     """AsyncInference: from Robot perspective
     Robot send observations to & executes action received from a remote Policy server
     """
@@ -286,6 +291,12 @@ class AsyncInferenceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def SendPolicyInstructions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SendIntervention(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -315,6 +326,11 @@ def add_AsyncInferenceServicer_to_server(servicer, server):
                     request_deserializer=lerobot_dot_transport_dot_services__pb2.PolicySetup.FromString,
                     response_serializer=lerobot_dot_transport_dot_services__pb2.Empty.SerializeToString,
             ),
+            'SendIntervention': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendIntervention,
+                    request_deserializer=lerobot_dot_transport_dot_services__pb2.Intervention.FromString,
+                    response_serializer=lerobot_dot_transport_dot_services__pb2.Empty.SerializeToString,
+            ),
             'Ready': grpc.unary_unary_rpc_method_handler(
                     servicer.Ready,
                     request_deserializer=lerobot_dot_transport_dot_services__pb2.Empty.FromString,
@@ -328,7 +344,7 @@ def add_AsyncInferenceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class AsyncInference:
+class AsyncInference(object):
     """AsyncInference: from Robot perspective
     Robot send observations to & executes action received from a remote Policy server
     """
@@ -403,6 +419,33 @@ class AsyncInference:
             target,
             '/transport.AsyncInference/SendPolicyInstructions',
             lerobot_dot_transport_dot_services__pb2.PolicySetup.SerializeToString,
+            lerobot_dot_transport_dot_services__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendIntervention(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/transport.AsyncInference/SendIntervention',
+            lerobot_dot_transport_dot_services__pb2.Intervention.SerializeToString,
             lerobot_dot_transport_dot_services__pb2.Empty.FromString,
             options,
             channel_credentials,

@@ -23,6 +23,7 @@ from typing import Any
 import torch
 
 from lerobot.configs import PolicyFeature
+from lerobot.vla_harness.config import HarnessConfig
 
 # NOTE: Configs need to be loaded for the client to be able to instantiate the policy config
 from lerobot.policies import (  # noqa: F401
@@ -190,8 +191,12 @@ def get_logger(name: str, log_to_file: bool = True) -> logging.Logger:
     else:
         log_file = None
 
-    # Initialize the standardized logging
-    init_logging(log_file=log_file, display_pid=False)
+    # Initialize the standardized logging. Fall back to console-only logging
+    # when the current environment cannot create log files.
+    try:
+        init_logging(log_file=log_file, display_pid=False)
+    except OSError:
+        init_logging(log_file=None, display_pid=False)
 
     # Return a named logger
     return logging.getLogger(name)
@@ -270,6 +275,7 @@ class RemotePolicyConfig:
     actions_per_chunk: int
     device: str = "cpu"
     rename_map: dict[str, str] = field(default_factory=dict)
+    harness_config: HarnessConfig = field(default_factory=HarnessConfig)
 
 
 def _compare_observation_states(obs1_state: torch.Tensor, obs2_state: torch.Tensor, atol: float) -> bool:

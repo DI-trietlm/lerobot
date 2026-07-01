@@ -11,11 +11,15 @@
 //  distributed under the License is distributed on an "AS IS" BASIS,
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
-//  limitations under the License.python -m grpc_tools.protoc -I src --python_out=src --grpc_python_out=src src/lerobot/transport/services.proto
+//  limitations under the License.
 
-// To generate a classes for transport part (services_pb2.py and services_pb2_grpc.py) use the following command:
+// To regenerate the transport protobuf/gRPC stubs:
 //
-// python -m grpc_tools.protoc -I src --python_out=src --grpc_python_out=src src/lerobot/transport/services.proto
+// 1. Install the repo dev dependencies once:
+//    uv sync --locked --extra dev
+//
+// 2. Regenerate the checked-in stub files from the repo root:
+//    uv run python -m grpc_tools.protoc -I src --python_out=src --grpc_python_out=src src/lerobot/transport/services.proto
 //
 // The command should be launched from the root of the project.
 
@@ -41,6 +45,7 @@ service AsyncInference {
   rpc SendObservations(stream Observation) returns (Empty);
   rpc GetActions(Empty) returns (Actions);
   rpc SendPolicyInstructions(PolicySetup) returns (Empty);
+  rpc SendIntervention(Intervention) returns (Empty);
   rpc Ready(Empty) returns (Empty);
 }
 
@@ -81,6 +86,11 @@ message Actions {
 
 message PolicySetup {
   // sent by Robot to remote server, to init Policy
+  bytes data = 1;
+}
+
+message Intervention {
+  // sent by Robot/client runtime to remote server when local execution guard intervenes
   bytes data = 1;
 }
 

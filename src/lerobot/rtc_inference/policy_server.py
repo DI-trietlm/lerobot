@@ -275,7 +275,7 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         self._close_action_recording()
         trace_path = root / "server_actions.jsonl"
         self._action_trace_writer = AsyncJsonlWriter(trace_path)
-        self.logger.info(f"Server action tracing enabled → {trace_path.resolve()}")
+        self.logger.info(f"Server action tracing enabled -> {trace_path.resolve()}")
 
     def _close_action_recording(self) -> None:
         if self._action_trace_writer is None:
@@ -351,6 +351,8 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         self.lerobot_features = policy_specs.lerobot_features
         self.rename_map = dict(getattr(policy_specs, "rename_map", {}) or {})
         self.actions_per_chunk = policy_specs.actions_per_chunk
+        self.config.fps = int(getattr(policy_specs, "fps", self.config.fps))
+        self.fps_tracker = FPSTracker(target_fps=self.config.fps)
         self.rtc_enabled = bool(getattr(policy_specs, "rtc_enabled", False))
         self.rtc_inference_delay_steps = getattr(policy_specs, "inference_delay_steps", None)
         self.image_compress_enable = bool(getattr(policy_specs, "image_compress_enable", False))
@@ -363,12 +365,17 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
             self._close_action_recording()
         self.capture_attn_enable = bool(getattr(policy_specs, "capture_attn_enable", False))
         self.capture_attn_dir = str(getattr(policy_specs, "capture_attn_dir", "attention_captures"))
-        harness_cfg = getattr(policy_specs, "harness_config", self.config.harness)
+        if not hasattr(policy_specs, "harness_config") or policy_specs.harness_config is None:
+            raise ValueError(
+                "RemotePolicyConfig.harness_config is required. "
+                "PolicyServer runtime policy/harness settings must come from the client setup payload."
+            )
+        harness_cfg = policy_specs.harness_config
         self.harness_profile_path = getattr(harness_cfg, "profile_path", None)
         self._attn_timestep = 0
         if self.capture_attn_enable:
             Path(self.capture_attn_dir).mkdir(parents=True, exist_ok=True)
-            self.logger.info(f"Attention capture enabled → {Path(self.capture_attn_dir).resolve()}")
+            self.logger.info(f"Attention capture enabled -> {Path(self.capture_attn_dir).resolve()}")
 
         policy_class = get_policy_class(self.policy_type)
 
@@ -444,19 +451,25 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
                 "auto" if self.rtc_inference_delay_steps is None else self.rtc_inference_delay_steps,
             )
         self.logger.info(
-            "Transport session settings (from client policy setup) | mode=%s | jpeg_quality=%s",
+            "Runtime session settings received from client | transport=%s | jpeg_quality=%s | harness=%s",
             "jpeg" if self.image_compress_enable else "raw",
             self.image_compress_quality,
+            "enabled" if getattr(harness_cfg, "enable", False) else "disabled",
         )
-        if getattr(harness_cfg, "enable", False) and self.harness_profile_path:
-            bundle = load_harness_profile(self.harness_profile_path)
+        self.logger.info(
+            "Timing session settings received from client | fps=%s | environment_dt=%.4fs",
+            self.config.fps,
+            self.config.environment_dt,
+        )
+        if getattr(harness_cfg, "enable", False):
+            bundle = load_harness_profile(self.harness_profile_path) if self.harness_profile_path else None
             trace_path = None
             if harness_cfg.trace.enable:
                 trace_path = str(Path(harness_cfg.log_dir) / "server_trace.jsonl")
             if self.harness_controller is not None:
                 self.harness_controller.close()
             self.harness_controller = ServerHarnessController(harness_cfg, bundle, trace_path=trace_path)
-            self.logger.info("Server harness enabled | profile=%s", self.harness_profile_path)
+            self.logger.info("Server harness enabled | profile=%s", self.harness_profile_path or "none")
         elif self.harness_controller is not None:
             self.harness_controller.close()
             self.harness_controller = None
@@ -1126,7 +1139,7 @@ def serve(cfg: PolicyServerConfig):
     Args:
         config: PolicyServerConfig instance. If None, uses default configuration.
     """
-    logging.info(pformat(asdict(cfg)))
+    logging.info("PolicyServer transport config: %s", pformat(asdict(cfg)))
 
     # Create the server instance first
     policy_server = PolicyServer(cfg)
@@ -1136,7 +1149,11 @@ def serve(cfg: PolicyServerConfig):
     services_pb2_grpc.add_AsyncInferenceServicer_to_server(policy_server, server)
     server.add_insecure_port(f"{cfg.host}:{cfg.port}")
 
-    policy_server.logger.info(f"PolicyServer started on {cfg.host}:{cfg.port}")
+    policy_server.logger.info(
+        "PolicyServer started on %s:%s | awaiting runtime policy/harness config from client",
+        cfg.host,
+        cfg.port,
+    )
     server.start()
     try:
         server.wait_for_termination()

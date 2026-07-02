@@ -198,3 +198,8 @@ xai/**/*summary*.json
 xai/**/__pycache__/
 xai/**/outputs/
 xai/artifacts/
+xai/runtime_trace_sync_*_analysis/
+xai/runtime_trace_sync_*_server/
+xai/runtime_trace_sync_*_keyframes.jpg
+
+harness_traces/*

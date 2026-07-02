@@ -130,6 +130,7 @@ class RobotClient:
             capture_attn_enable=config.capture_attn_enable,
             capture_attn_dir=config.capture_attn_dir,
             harness_config=config.harness,
+            fps=config.fps,
         )
         self.channel = grpc.insecure_channel(
             self.server_address, grpc_channel_options(initial_backoff=f"{config.environment_dt:.4f}s")
@@ -175,8 +176,12 @@ class RobotClient:
             self._setup_action_recording(self.config.record_action_dir)
 
         self.harness_controller: ClientHarnessController | None = None
-        if self.config.harness.enable and self.config.harness.profile_path:
-            bundle = load_harness_profile(self.config.harness.profile_path)
+        if self.config.harness.enable:
+            bundle = (
+                load_harness_profile(self.config.harness.profile_path)
+                if self.config.harness.profile_path
+                else None
+            )
             trace_path = None
             if self.config.harness.trace.enable:
                 trace_path = str(Path(self.config.harness.log_dir) / "client_trace.jsonl")
@@ -185,7 +190,7 @@ class RobotClient:
                 bundle,
                 trace_path=trace_path,
             )
-            self.logger.info("Client harness enabled | profile=%s", self.config.harness.profile_path)
+            self.logger.info("Client harness enabled | profile=%s", self.config.harness.profile_path or "none")
 
         self.logger.info("Robot connected and ready")
         self.logger.info(
@@ -207,7 +212,7 @@ class RobotClient:
         root.mkdir(parents=True, exist_ok=True)
         trace_path = root / "client_actions.jsonl"
         self._action_trace_writer = AsyncJsonlWriter(trace_path)
-        self.logger.info(f"Client action tracing enabled → {trace_path.resolve()}")
+        self.logger.info(f"Client action tracing enabled -> {trace_path.resolve()}")
 
     def _record_action_event(self, event: str, payload: dict[str, Any]) -> None:
         if self._action_trace_writer is None:
@@ -233,7 +238,7 @@ class RobotClient:
         self._record_root = root
         self._record_meta_path = root / "metadata.jsonl"
         root.mkdir(parents=True, exist_ok=True)
-        self.logger.info(f"Observation recording enabled → {root.resolve()}")
+        self.logger.info(f"Observation recording enabled -> {root.resolve()}")
 
         self._record_thread = threading.Thread(target=self._recording_worker, daemon=True)
         self._record_thread.start()

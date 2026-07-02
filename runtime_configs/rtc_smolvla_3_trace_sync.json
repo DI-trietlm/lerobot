@@ -69,7 +69,7 @@
   "capture_attn_dir": "attention_captures",
   "harness": {
     "enable": true,
-    "profile_path": "outputs/harness_profiles/pouring_0_3/harness_profile.json",
+    "profile_path": null,
     "shadow_mode": true,
     "fail_closed": false,
     "log_dir": "harness_traces/trace_sync",

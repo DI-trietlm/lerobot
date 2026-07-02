@@ -540,6 +540,7 @@ class RemotePolicyConfig:
     capture_attn_enable: bool = False
     capture_attn_dir: str = "attention_captures"
     harness_config: HarnessConfig = field(default_factory=HarnessConfig)
+    fps: int = 30
 
 
 def _compare_observation_states(obs1_state: torch.Tensor, obs2_state: torch.Tensor, atol: float) -> bool:

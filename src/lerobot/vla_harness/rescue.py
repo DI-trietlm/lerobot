@@ -131,6 +131,47 @@ class MicroRescuePlanner:
         self._rescues_this_episode = 0
         self._last_rescue_time = 0.0
 
+    def _prepend_ramp_in(
+        self,
+        current_state: np.ndarray,
+        snippet: np.ndarray,
+        max_total_steps: int,
+    ) -> tuple[np.ndarray, dict[str, Any]]:
+        if len(snippet) == 0:
+            return snippet, {"ramp_in_steps": 0}
+
+        current = np.asarray(current_state, dtype=np.float64)
+        if current.shape != snippet[0].shape:
+            return snippet, {"ramp_in_steps": 0, "ramp_in_skipped": "shape_mismatch"}
+
+        requested_steps = max(0, int(self.cfg.micro_rescue.ramp_in_steps))
+        max_joint_delta = self.cfg.micro_rescue.ramp_in_max_joint_delta
+        if max_joint_delta is not None and max_joint_delta > 0:
+            max_delta = float(np.max(np.abs(snippet[0] - current)))
+            requested_steps = max(requested_steps, int(np.ceil(max_delta / max_joint_delta)))
+
+        if requested_steps <= 1:
+            first_step_delta = float(np.linalg.norm(snippet[0] - current))
+            return snippet, {
+                "ramp_in_steps": 0,
+                "pre_ramp_first_step_l2": first_step_delta,
+                "post_ramp_first_step_l2": first_step_delta,
+            }
+
+        fractions = np.linspace(1.0 / requested_steps, 1.0, requested_steps, dtype=np.float64)
+        bridge = current[None, :] + fractions[:, None] * (snippet[0][None, :] - current[None, :])
+        snippet = np.concatenate([bridge, snippet[1:]], axis=0)
+        if len(snippet) > max_total_steps:
+            snippet = snippet[:max_total_steps]
+
+        return snippet, {
+            "ramp_in_steps": int(len(bridge)),
+            "ramp_in_requested_steps": int(requested_steps),
+            "ramp_in_max_joint_delta": max_joint_delta,
+            "pre_ramp_first_step_l2": float(np.linalg.norm(bridge[-1] - current)),
+            "post_ramp_first_step_l2": float(np.linalg.norm(snippet[0] - current)),
+        }
+
     def query(self, current_state: np.ndarray, now_s: float | None = None) -> MicroRescueDecision:
         if not self.cfg.effective_enabled(self.cfg.micro_rescue.enable) or self.rescue_index is None:
             return MicroRescueDecision(False, "shadow", "micro_rescue_disabled")
@@ -168,6 +209,11 @@ class MicroRescuePlanner:
             snippet = self.cfg.micro_rescue.blend_alpha * snippet + (
                 1.0 - self.cfg.micro_rescue.blend_alpha
             ) * np.asarray(current_state, dtype=np.float64)
+        snippet, ramp_metadata = self._prepend_ramp_in(
+            current_state=np.asarray(current_state, dtype=np.float64),
+            snippet=snippet,
+            max_total_steps=max_steps_from_duration,
+        )
 
         self._rescues_this_episode += 1
         if now_s is not None:
@@ -186,5 +232,6 @@ class MicroRescuePlanner:
                     if key != "action_snippet"
                 },
                 "neighbor_count": len(neighbors),
+                **ramp_metadata,
             },
         )

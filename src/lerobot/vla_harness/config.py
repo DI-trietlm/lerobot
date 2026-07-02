@@ -40,6 +40,8 @@ class MicroRescueConfig:
     snippet_horizon_steps: int = 8
     max_duration_s: float = 1.0
     blend_alpha: float = 1.0
+    ramp_in_steps: int = 0
+    ramp_in_max_joint_delta: float | None = None
     min_future_progress_score: float = 0.2
     max_state_distance: float | None = None
     cooldown_s: float = 2.0

@@ -111,6 +111,8 @@
       "snippet_horizon_steps": 8,
       "max_duration_s": 1.0,
       "blend_alpha": 1.0,
+      "ramp_in_steps": 5,
+      "ramp_in_max_joint_delta": 5.0,
       "min_future_progress_score": 0.2,
       "max_state_distance": null,
       "cooldown_s": 7.0,

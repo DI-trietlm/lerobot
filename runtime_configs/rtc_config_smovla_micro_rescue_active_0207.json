@@ -88,9 +88,9 @@
       "hard_invariant_guard_enable": false,
       "speed_envelope_enable": false,
       "tracking_monitor_enable": true,
-      "tracking_monitor_window_steps": 45,
-      "tracking_monitor_state_radius": 18.0,
-      "tracking_monitor_min_path_length": 0.0,
+      "tracking_monitor_window_steps": 12,
+      "tracking_monitor_state_radius": 12.0,
+      "tracking_monitor_min_path_length": 8.0,
       "tracking_monitor_cooldown_steps": 75,
       "tracking_monitor_dims": [
         0,

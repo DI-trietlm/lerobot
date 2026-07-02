@@ -180,6 +180,74 @@ def test_client_shadow_tracking_does_not_block_or_emit_intervention():
     assert not client.execution_blocked
 
 
+def test_client_tracking_detects_bounded_loitering():
+    cfg = HarnessConfig(enable=True, shadow_mode=False)
+    cfg.client.tracking_monitor_window_steps = 4
+    cfg.client.tracking_monitor_state_radius = 1.0
+    cfg.client.tracking_monitor_dims = [0]
+    client = ClientHarnessController(cfg, _make_bundle())
+    client.on_chunk_received("chunk", "infer")
+
+    events = [
+        client.observe_state(np.array([0.0])),
+        client.observe_state(np.array([0.7])),
+        client.observe_state(np.array([-0.4])),
+        client.observe_state(np.array([0.2])),
+    ]
+
+    assert events[:-1] == [None, None, None]
+    assert events[-1] is not None
+    assert events[-1].reason == "stuck_candidate"
+    assert events[-1].severity == "soft"
+    assert events[-1].requires_reinfer
+    assert events[-1].metadata["radius"] <= 1.0
+
+
+def test_client_tracking_ignores_clear_progress():
+    cfg = HarnessConfig(enable=True, shadow_mode=False)
+    cfg.client.tracking_monitor_window_steps = 4
+    cfg.client.tracking_monitor_state_radius = 1.0
+    cfg.client.tracking_monitor_dims = [0]
+    client = ClientHarnessController(cfg, _make_bundle())
+    client.on_chunk_received("chunk", "infer")
+
+    events = [
+        client.observe_state(np.array([0.0])),
+        client.observe_state(np.array([2.0])),
+        client.observe_state(np.array([4.0])),
+        client.observe_state(np.array([6.0])),
+    ]
+
+    assert events == [None, None, None, None]
+
+
+def test_shadow_tracking_event_can_arm_server_rescue_probe():
+    cfg = HarnessConfig(enable=True, shadow_mode=True)
+    cfg.client.tracking_monitor_window_steps = 4
+    cfg.client.tracking_monitor_state_radius = 1.0
+    cfg.client.tracking_monitor_dims = [0]
+    bundle = _make_bundle()
+    client = ClientHarnessController(cfg, bundle)
+    server = ServerHarnessController(cfg, bundle)
+    client.on_chunk_received("chunk", "infer")
+
+    event = None
+    for state in [0.0, 0.7, -0.4, 0.2]:
+        event = client.observe_state(np.array([state]))
+
+    assert event is not None
+    assert event.severity == "shadow"
+    assert not client.execution_blocked
+
+    server.register_intervention(event)
+    rescue, metadata = server.maybe_replace_with_rescue(np.array([0.1]))
+
+    assert rescue is None
+    assert metadata is not None
+    assert metadata["severity"] == "shadow"
+    assert metadata["would_rescue"] is True
+
+
 def test_client_component_toggle_disables_hard_invariant_guard():
     cfg = HarnessConfig(enable=True, shadow_mode=False)
     cfg.client.hard_invariant_guard_enable = False

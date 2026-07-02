@@ -32,7 +32,11 @@ class ClientHarnessController:
             ActionEnvelopeGuard(profile.speed_envelopes, cfg) if profile is not None else None
         )
         self._mode_history: list[str] = []
-        self._state_history: deque[np.ndarray] = deque(maxlen=16)
+        self._state_history: deque[np.ndarray] = deque(
+            maxlen=max(2, int(cfg.client.tracking_monitor_window_steps))
+        )
+        self._state_sample_count = 0
+        self._next_tracking_event_sample = 0
         self._current_chunk_id: str | None = None
         self._current_inference_id: str | None = None
         self._blocked_chunk_id: str | None = None
@@ -55,6 +59,7 @@ class ClientHarnessController:
 
     def observe_state(self, current_state: np.ndarray) -> InterventionEvent | None:
         current_state = np.asarray(current_state, dtype=np.float64)
+        self._state_sample_count += 1
         self._state_history.append(current_state.copy())
         if not self.cfg.effective_enabled(self.cfg.client.enable):
             return None
@@ -62,28 +67,55 @@ class ClientHarnessController:
             return None
         if len(self._state_history) < self._state_history.maxlen:
             return None
-        displacement = float(np.linalg.norm(self._state_history[-1] - self._state_history[0]))
-        scale = float(np.linalg.norm(np.std(np.stack(self._state_history, axis=0), axis=0)))
-        stuck = displacement < max(1e-3, 0.1 * scale)
+        if self._state_sample_count < self._next_tracking_event_sample:
+            return None
+
+        window = np.stack(self._state_history, axis=0)
+        dims = [dim for dim in self.cfg.client.tracking_monitor_dims if 0 <= dim < window.shape[1]]
+        if dims:
+            window = window[:, dims]
+        centroid = np.mean(window, axis=0)
+        distances_to_centroid = np.linalg.norm(window - centroid[None, :], axis=1)
+        radius = float(np.max(distances_to_centroid))
+        mean_radius = float(np.mean(distances_to_centroid))
+        displacement = float(np.linalg.norm(window[-1] - window[0]))
+        step_distances = np.linalg.norm(np.diff(window, axis=0), axis=1)
+        path_length = float(np.sum(step_distances))
+        stuck = (
+            radius <= self.cfg.client.tracking_monitor_state_radius
+            and path_length >= self.cfg.client.tracking_monitor_min_path_length
+        )
         if not stuck or self._current_chunk_id is None or self._current_inference_id is None:
             return None
+        metadata = {
+            "window_steps": len(self._state_history),
+            "dims": dims,
+            "radius": radius,
+            "mean_radius": mean_radius,
+            "displacement": displacement,
+            "path_length": path_length,
+            "state_radius_threshold": self.cfg.client.tracking_monitor_state_radius,
+            "min_path_length": self.cfg.client.tracking_monitor_min_path_length,
+        }
+        self._next_tracking_event_sample = (
+            self._state_sample_count + max(1, int(self.cfg.client.tracking_monitor_cooldown_steps))
+        )
         if self.cfg.shadow_mode:
-            self._trace_intervention_like(
+            return self._make_event(
                 severity="shadow",
                 reason="stuck_candidate",
                 current_state=current_state,
                 original_action=current_state,
                 executed_action=current_state,
-                metadata={"displacement": displacement, "scale": scale, "would_flush": True},
+                metadata={**metadata, "would_flush": True},
             )
-            return None
         return self._make_event(
             severity="soft",
             reason="stuck_candidate",
             original_action=current_state,
             executed_action=current_state,
             current_state=current_state,
-            metadata={"displacement": displacement, "scale": scale},
+            metadata=metadata,
         )
 
     def evaluate_action(

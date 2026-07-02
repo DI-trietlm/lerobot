@@ -21,6 +21,11 @@ class HarnessClientConfig:
     hard_invariant_guard_enable: bool = True
     speed_envelope_enable: bool = True
     tracking_monitor_enable: bool = True
+    tracking_monitor_window_steps: int = 45
+    tracking_monitor_state_radius: float = 18.0
+    tracking_monitor_min_path_length: float = 0.0
+    tracking_monitor_cooldown_steps: int = 45
+    tracking_monitor_dims: list[int] = field(default_factory=lambda: [0, 1, 2, 3, 4])
     clear_queue_on_intervention: bool = True
     request_reinfer_on_intervention: bool = True
 

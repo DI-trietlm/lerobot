@@ -46,8 +46,7 @@ class ServerHarnessController:
         if event.severity != "shadow" and self.flush.intervention_requires_flush(event):
             self.runtime.invalidate_chunk(event.chunk_id)
         if (
-            event.severity != "shadow"
-            and event.requires_reinfer
+            event.requires_reinfer
             and self.cfg.effective_enabled(self.cfg.server.enable)
             and self.cfg.server.micro_rescue_proposal_enable
         ):

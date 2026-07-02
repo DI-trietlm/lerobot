@@ -1052,6 +1052,10 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
                 timestamp=observation_t.get_timestamp(),
                 policy_metadata=policy_metadata,
             )
+            if rescue_metadata and envelope.harness_decision is not None:
+                envelope.harness_decision.rescue_suggested = bool(
+                    rescue_metadata.get("would_rescue") or rescue_metadata.get("reason") == "micro_rescue_selected"
+                )
             action_tensor = torch.as_tensor(action_tensor_np, dtype=processed_action_tensor.dtype)
 
         """5. Convert to TimedAction list"""

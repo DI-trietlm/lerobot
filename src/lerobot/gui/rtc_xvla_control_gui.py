@@ -1537,14 +1537,14 @@ class RTCControlGUI(tk.Tk):
         self._stop_client_stream_preserve_robot()
 
         duration = self._parse_float("reset_duration_after_stop")
-        self._log(f"[INFO] Auto-resetting to safe start pose ({duration:.1f}s)...")
-        self._reset_robot_to_start_pose(duration=duration)
+        self._log(f"[INFO] Moving to safe pose ({duration:.1f}s)...")
+        self._move_to_safe_pose(duration=duration)
 
         with self._state_lock:
-            self._state.start_pose_done = True
+            self._state.start_pose_done = False
 
-        self._set_status("Connected | Start Pose Done")
-        self._log("[OK] Stream stopped and robot auto-reset to safe start pose")
+        self._set_status("Connected | Safe Pose")
+        self._log("[OK] Stream stopped and robot moved to safe pose")
         self.after(0, self._refresh_controls)
 
     def _on_auto_reset_cycle(self):

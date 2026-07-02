@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VLA Harness Architecture</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #1b2430;
+      --muted: #5d6978;
+      --line: #d8dee8;
+      --server: #22577a;
+      --client: #8a4f14;
+      --sync: #2d6a4f;
+      --warn: #9d4edd;
+      --danger: #b42318;
+      --ok: #087f5b;
+      --shadow: #6c757d;
+      --code: #eef2f7;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1180px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+    h1, h2, h3 { line-height: 1.15; margin: 0; }
+    h1 { font-size: clamp(32px, 5vw, 58px); letter-spacing: -0.02em; }
+    h2 { font-size: 26px; margin-top: 34px; }
+    h3 { font-size: 18px; margin-top: 20px; }
+    p { margin: 10px 0; }
+    a { color: var(--server); }
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: var(--code);
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f172a;
+      color: #e5e7eb;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #edf2f7; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+    tr:last-child td { border-bottom: none; }
+    .hero {
+      padding: 34px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: linear-gradient(180deg, #ffffff 0%, #eef4f8 100%);
+    }
+    .subtitle {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 18px;
+      margin-top: 14px;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .panel {
+      margin-top: 16px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .card h3 { margin-top: 0; }
+    .server { border-top: 4px solid var(--server); }
+    .client { border-top: 4px solid var(--client); }
+    .sync { border-top: 4px solid var(--sync); }
+    .risk { border-top: 4px solid var(--danger); }
+    .muted { color: var(--muted); }
+    .diagram {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr 1.2fr 1fr;
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 18px;
+    }
+    .node {
+      min-height: 86px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      position: relative;
+    }
+    .node strong { display: block; margin-bottom: 6px; }
+    .node.dataset { border-top: 4px solid var(--warn); }
+    .node.server-node { border-top: 4px solid var(--server); }
+    .node.client-node { border-top: 4px solid var(--client); }
+    .node.sync-node { border-top: 4px solid var(--sync); }
+    .arrow {
+      text-align: center;
+      color: var(--muted);
+      font-weight: 700;
+      margin: 8px 0;
+    }
+    .priority {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr) 160px;
+      gap: 12px;
+      align-items: start;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .priority:last-child { border-bottom: none; }
+    .rank {
+      display: inline-grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #fff;
+      font-weight: 700;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .badge.on { background: var(--ok); }
+    .badge.shadow { background: var(--shadow); }
+    .badge.wait { background: var(--warn); }
+    .badge.hard { background: var(--danger); }
+    .checklist li { margin: 7px 0; }
+    @media (max-width: 900px) {
+      main { width: min(100vw - 24px, 1180px); padding-top: 20px; }
+      .grid.two, .grid.three, .diagram { grid-template-columns: 1fr; }
+      .priority { grid-template-columns: 44px minmax(0, 1fr); }
+      .priority .stage { grid-column: 2; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <h1>VLA Harness Architecture</h1>
+    <p class="subtitle">
+      Kiến trúc hybrid server/client cho SmolVLA deployment: VLA vẫn là controller chính,
+      harness chỉ giám sát, chặn lỗi rõ ràng, can thiệp rất nhỏ khi kẹt, rồi bắt buộc
+      flush/re-infer để tránh bất đồng bộ chunk.
+    </p>
+    <div class="meta">
+      <span class="pill">Repo: LeRobot RTC stack</span>
+      <span class="pill">Runtime config: <code>runtime_configs/*.json</code></span>
+      <span class="pill">Code: <code>src/lerobot/vla_harness/</code></span>
+      <span class="pill">Principle: data-derived, not task-hardcoded</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>1. Điều ta đang giải quyết</h2>
+    <p>
+      Lỗi runtime hiện tại không nên hiểu đơn giản là "robot cứ về safe pose".
+      Dataset cho thấy folded/safe-like pose có thể là waypoint hợp lệ trước approach/grasp.
+      Vấn đề nguy hiểm hơn là <strong>mất phase progression</strong>: policy có lúc đi vào
+      vùng prepare/folded nhưng không thoát tiếp sang approach/grasp/pour, hoặc gửi hành động
+      phá task như mở gripper sai thời điểm.
+    </p>
+    <p>
+      Vì vậy harness không được hard-code "cấm về safe pose". Nó cần phát hiện stuck,
+      action ngoài phân phối, invariant bị phá, rồi can thiệp tối thiểu từ chính phân phối
+      demonstration.
+    </p>
+  </section>
+
+  <section>
+    <h2>2. Sơ đồ tổng thể</h2>
+    <div class="diagram">
+      <div class="node dataset">
+        <strong>Offline Dataset Profile</strong>
+        Mine mode, invariant, speed envelope, rescue snippets từ dataset train.
+        Output: <code>harness_profile.json</code>.
+      </div>
+      <div class="node server-node">
+        <strong>Server Harness</strong>
+        Gắn gần policy: validate raw/postprocessed chunk, build metadata, đề xuất micro-rescue,
+        nhận intervention từ client.
+      </div>
+      <div class="node client-node">
+        <strong>Client Harness</strong>
+        Gắn gần robot: final guard, tracking monitor, speed clamp, hard invariant guard,
+        clear queue khi can thiệp.
+      </div>
+      <div class="node sync-node">
+        <strong>Sync + Trace</strong>
+        Intervention ledger, chunk id, queue invalidation, re-infer request, trace JSONL.
+      </div>
+    </div>
+    <div class="arrow">Dataset profile -> server validation -> client execution guard -> intervention -> flush/re-infer</div>
+  </section>
+
+  <section>
+    <h2>3. Hybrid server/client: đặt cái gì ở đâu?</h2>
+    <div class="grid two">
+      <div class="card server">
+        <h3>Server side</h3>
+        <p class="muted">Nơi biết policy, raw chunk, postprocessor và profile dataset.</p>
+        <ul>
+          <li>Load <code>harness_profile.json</code>.</li>
+          <li>Validate chunk trước khi gửi sang client.</li>
+          <li>Estimate mode từ state/action history nếu profile đủ tốt.</li>
+          <li>Đánh dấu invariant/speed violations trong <code>harness_decision</code>.</li>
+          <li>Đề xuất hoặc thay chunk bằng micro-rescue khi có intervention + stuck context.</li>
+          <li>Nhận intervention event từ client và clear RTC/action queue nếu cần.</li>
+        </ul>
+      </div>
+      <div class="card client">
+        <h3>Client side</h3>
+        <p class="muted">Nơi biết robot thực thi gì thật, tracking error và state sau action.</p>
+        <ul>
+          <li>Final guard trước khi gửi action xuống robot.</li>
+          <li>Chặn hard invariant có hậu quả rõ, ví dụ actuator/gripper release sai mode.</li>
+          <li>Clamp spike/velocity ngoài envelope ở mức an toàn.</li>
+          <li>Monitor tracking error: commanded vs actual state.</li>
+          <li>Gửi intervention event về server.</li>
+          <li>Clear local queue và yêu cầu fresh chunk khi intervention mạnh.</li>
+        </ul>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Thành phần</th>
+          <th>Ưu tiên đặt chính</th>
+          <th>Lý do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Trace + chunk metadata</td>
+          <td>Server + Client</td>
+          <td>Cần ghép được timeline: raw action, postprocessed chunk, executed action, actual state.</td>
+        </tr>
+        <tr>
+          <td>Invariant mining/profile</td>
+          <td>Offline + Server</td>
+          <td>Profile phụ thuộc dataset, mode graph, percentile, support/violation rate.</td>
+        </tr>
+        <tr>
+          <td>Hard safety/invariant guard</td>
+          <td>Client final gate</td>
+          <td>Client là nơi cuối cùng trước robot, nên phải có quyền chặn action phá task rõ ràng.</td>
+        </tr>
+        <tr>
+          <td>Micro-rescue selection</td>
+          <td>Server proposal, client execution</td>
+          <td>Server chọn snippet theo profile; client execute bounded và flush/re-infer.</td>
+        </tr>
+        <tr>
+          <td>Speed envelope</td>
+          <td>Client, có server shadow</td>
+          <td>Speed guard là safety envelope runtime, không phải controller chính.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel sync">
+    <h2>4. Rule cứng: intervention phải flush/re-infer</h2>
+    <p>
+      Nếu harness sửa action nhưng policy/RTC vẫn tiếp tục chunk cũ, server sẽ tin rằng robot đã
+      đi theo action A trong khi thực tế robot đi theo A'. Đây là nguồn bất đồng bộ rất độc.
+    </p>
+    <pre>policy planned chunk A
+        |
+client harness executes modified action A'
+        |
+actual observation comes from A'
+        |
+old chunk/aggregator still assumes A  -> drift / confusion / repeated failure</pre>
+    <p>Vì vậy các can thiệp sau phải clear queue/chunk và infer lại:</p>
+    <ul class="checklist">
+      <li>Micro-rescue được execute.</li>
+      <li>Hard invariant clamp/reject, đặc biệt gripper/actuator.</li>
+      <li>Repeated speed clamp vượt ngưỡng <code>max_consecutive_clamps</code>.</li>
+      <li>Stop/hold safety intervention.</li>
+      <li>Server reject/resample chunk.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>5. Bốn harness chính</h2>
+    <div class="grid two">
+      <div class="card">
+        <h3>1. Dataset-Manifold Micro-Rescue</h3>
+        <p>
+          Khi stuck, tìm neighbor gần current state trong dataset, chọn snippet ngắn có future progress
+          tốt, execute 0.3-1.0s rồi flush/re-infer.
+        </p>
+        <p><strong>Không</strong> replay cả episode. Không dùng nếu state OOD so với profile.</p>
+      </div>
+      <div class="card">
+        <h3>2. Data-Derived Invariant Guard</h3>
+        <p>
+          Mine invariant theo mode: plateau, no-backtrack, one-shot event, value/velocity envelope.
+          Ví dụ task pouring có thể học rằng một actuator ổn định không nên release sai mode.
+        </p>
+        <p><strong>Không</strong> hard-code tên grasp/hold/release làm logic mặc định.</p>
+      </div>
+      <div class="card">
+        <h3>3. Action Stability + Speed Envelope</h3>
+        <p>
+          Chặn spike, endpoint jump, acceleration/jerk ngoài phân phối. Nếu phải clamp liên tục,
+          coi là failure và re-infer/rescue, không clamp âm thầm mãi.
+        </p>
+      </div>
+      <div class="card">
+        <h3>4. Runtime Sync + Trace Harness</h3>
+        <p>
+          Ghi intervention ledger, raw/postprocessed/executed action, actual state, chunk id, mode estimate,
+          rescue neighbor. Đây là nền để debug mọi lần fail.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>6. Ưu tiên bật sắp tới</h2>
+    <div class="panel">
+      <div class="priority">
+        <div class="rank">1</div>
+        <div>
+          <h3>Trace + Sync trước</h3>
+          <p>
+            Bật harness ở chế độ ghi trace, chunk id, intervention ledger, action/server/client logs.
+            Mục tiêu là mọi run fail phải trả lời được: raw policy sai, server postprocess sai,
+            RTC/aggregation sai, hay client execution sai.
+          </p>
+        </div>
+        <div class="stage"><span class="badge on">Bật ngay</span></div>
+      </div>
+
+      <div class="priority">
+        <div class="rank">2</div>
+        <div>
+          <h3>Invariant Guard ở shadow mode</h3>
+          <p>
+            Chạy invariant guard không can thiệp trước để đo false positive trên runtime thật.
+            Đặc biệt theo dõi actuator/gripper release sai mode và no-backtrack violation.
+          </p>
+        </div>
+        <div class="stage"><span class="badge shadow">Shadow</span></div>
+      </div>
+
+      <div class="priority">
+        <div class="rank">3</div>
+        <div>
+          <h3>Hard guard chỉ cho invariant confidence cao</h3>
+          <p>
+            Sau khi profile chứng minh support cao và train violation thấp, bật hard guard cho
+            nhóm <code>catastrophic_actuator_release</code>. Mọi hard clamp phải flush/re-infer.
+          </p>
+        </div>
+        <div class="stage"><span class="badge hard">Cẩn trọng</span></div>
+      </div>
+
+      <div class="priority">
+        <div class="rank">4</div>
+        <div>
+          <h3>Speed envelope shadow, rồi soft clamp giới hạn</h3>
+          <p>
+            Speed envelope dùng để chặn outlier/spike, không dùng để lái robot từng frame.
+            Nếu clamp lặp lại, dừng clamp âm thầm và chuyển sang re-infer/micro-rescue.
+          </p>
+        </div>
+        <div class="stage"><span class="badge shadow">Shadow -> soft</span></div>
+      </div>
+
+      <div class="priority">
+        <div class="rank">5</div>
+        <div>
+          <h3>Micro-rescue sau khi profile được validate</h3>
+          <p>
+            Đây là hướng có giá trị nhất để thoát điểm chết, nhưng chỉ bật khi rescue index có
+            neighbor tốt, max distance hợp lý, cooldown/budget rõ, và trace đầy đủ.
+          </p>
+        </div>
+        <div class="stage"><span class="badge wait">Sau profile</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>7. Preset config nên dùng</h2>
+    <p>
+      Code hiện có hỗ trợ các preset trong <code>src/lerobot/vla_harness/config.py</code>.
+      Đề xuất rollout:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Giai đoạn</th>
+          <th>Preset</th>
+          <th>Mục tiêu</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Ngay bây giờ</td>
+          <td><code>trace_only</code></td>
+          <td>Ghi đủ trace, không thay hành vi robot.</td>
+        </tr>
+        <tr>
+          <td>Sau khi có profile đầu tiên</td>
+          <td><code>shadow_all</code></td>
+          <td>Đo invariant/speed/rescue decision mà chưa can thiệp.</td>
+        </tr>
+        <tr>
+          <td>Khi invariant gripper/actuator rất chắc</td>
+          <td><code>guard_gripper_only</code></td>
+          <td>Chặn lỗi phá task rõ ràng, vẫn không bật micro-rescue.</td>
+        </tr>
+        <tr>
+          <td>Khi speed false positive thấp</td>
+          <td><code>guard_and_speed</code></td>
+          <td>Thêm speed envelope như safety guard.</td>
+        </tr>
+        <tr>
+          <td>Khi rescue index tốt</td>
+          <td><code>full_with_micro_rescue</code></td>
+          <td>Cho phép can thiệp micro để thoát stuck, có cooldown và max rescue budget.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Config shape tối thiểu</h3>
+    <pre>{
+  "harness": {
+    "enable": true,
+    "profile_path": "outputs/harness_profiles/pouring_0_3/harness_profile.json",
+    "shadow_mode": true,
+    "log_dir": "harness_traces",
+    "trace": {
+      "enable": true,
+      "record_raw_chunks": true,
+      "record_postprocessed_chunks": true,
+      "record_executed_actions": true
+    },
+    "sync": {
+      "enable": true,
+      "flush_on_rescue": true,
+      "flush_on_hard_clamp": true,
+      "flush_on_repeated_speed_clamp": true
+    }
+  }
+}</pre>
+  </section>
+
+  <section class="panel risk">
+    <h2>8. Những điều không nên bật vội</h2>
+    <ul class="checklist">
+      <li>Không bật micro-rescue hard nếu chưa có profile/rescue index kiểm chứng trên dataset.</li>
+      <li>Không bật speed clamp hard liên tục như controller thay VLA.</li>
+      <li>Không hard-code "gần safe pose là lỗi"; folded/pre-grasp có thể hợp lệ.</li>
+      <li>Không clamp gripper/action đáng kể mà không clear queue và re-infer.</li>
+      <li>Không rollout guard nếu trace chưa đủ để tái dựng timeline fail.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>9. Checklist trước lần robot test tiếp theo</h2>
+    <ul class="checklist">
+      <li>Config dùng path mới trong <code>runtime_configs/</code>.</li>
+      <li>Server và client cùng thấy <code>harness.profile_path</code> nếu bật profile-based guard.</li>
+      <li>Bật trace trước, xác nhận sinh <code>server_trace.jsonl</code> và client intervention/runtime logs.</li>
+      <li>Nếu guard can thiệp: kiểm tra event có <code>chunk_id</code>, <code>queue_cleared</code>, <code>requires_reinfer</code>.</li>
+      <li>Sau mỗi run fail, phân tích raw chunk vs executed action trước khi kết luận model/data.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

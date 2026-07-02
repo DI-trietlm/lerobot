@@ -1,0 +1,151 @@
+{
+  "server_address": "192.168.30.244:4567",
+  "robot": {
+    "type": "so100_follower",
+    "port": "COM6",
+    "disable_torque_on_disconnect": true,
+    "max_relative_target": null,
+    "cameras": {
+      "camera1": {
+        "type": "opencv",
+        "fps": 30,
+        "width": 1280,
+        "height": 720,
+        "index_or_path": 1,
+        "color_mode": "rgb",
+        "rotation": 0,
+        "warmup_s": 1,
+        "fourcc": null,
+        "backend": 0
+      },
+      "camera2": {
+        "type": "opencv",
+        "fps": 30,
+        "width": 640,
+        "height": 360,
+        "index_or_path": 0,
+        "color_mode": "rgb",
+        "rotation": 0,
+        "warmup_s": 1,
+        "fourcc": null,
+        "backend": 0
+      }
+    },
+    "use_degrees": true,
+    "id": "DI_VLA_FOLLOWER",
+    "calibration_dir": null
+  },
+  "task": "Pour from orange cup to blue cup.",
+  "policy_type": "smolvla",
+  "pretrained_name_or_path": "di-techinnova/smolvla-pouring-0.3-cutted",
+  "policy_device": "cuda",
+  "client_device": "cpu",
+  "rename_map": {
+    "observation.images.camera1": "observation.images.camera1",
+    "observation.images.camera2": "observation.images.camera2"
+  },
+  "actions_per_chunk": 35,
+  "chunk_size_threshold": 0.5,
+  "aggregate_fn_name": "weighted_average",
+  "rtc_enabled": true,
+  "rtc_execution_horizon": 10,
+  "rtc_max_guidance_weight": 2.0,
+  "rtc_prefix_attention_schedule": "EXP",
+  "rtc_debug": false,
+  "rtc_debug_maxlen": 100,
+  "inference_delay_steps": 2,
+  "xvla_domain_id": 15,
+  "fps": 15,
+  "obs_timestep_independent": false,
+  "image_compress_enable": true,
+  "image_compress_quality": 90,
+  "interpolation_multiplier": 1,
+  "debug_visualize_queue_size": true,
+  "record_obs_enable": true,
+  "record_obs_dir": "recorded_obs-harness-trace-sync",
+  "record_action_enable": true,
+  "record_action_dir": "recorded_obs-harness-trace-sync",
+  "capture_attn_enable": false,
+  "capture_attn_dir": "attention_captures",
+  "harness": {
+    "enable": true,
+    "profile_path": "outputs/harness_profiles/pouring_0_3/harness_profile.json",
+    "shadow_mode": true,
+    "fail_closed": false,
+    "log_dir": "harness_traces/trace_sync",
+    "server": {
+      "enable": true,
+      "chunk_validator_enable": true,
+      "invariant_guard_enable": false,
+      "micro_rescue_proposal_enable": false,
+      "reject_resample_enable": false,
+      "max_resample_attempts": 0,
+      "re_infer_on_intervention": true
+    },
+    "client": {
+      "enable": true,
+      "execution_guard_enable": true,
+      "hard_invariant_guard_enable": false,
+      "speed_envelope_enable": false,
+      "tracking_monitor_enable": true,
+      "clear_queue_on_intervention": true,
+      "request_reinfer_on_intervention": true
+    },
+    "micro_rescue": {
+      "enable": false,
+      "shadow_mode": true,
+      "state_knn_enable": true,
+      "image_knn_enable": false,
+      "k_neighbors": 16,
+      "snippet_horizon_steps": 8,
+      "max_duration_s": 1.0,
+      "blend_alpha": 1.0,
+      "min_future_progress_score": 0.2,
+      "max_state_distance": null,
+      "cooldown_s": 2.0,
+      "max_rescues_per_episode": 3
+    },
+    "invariant_guard": {
+      "enable": false,
+      "shadow_mode": true,
+      "min_support": 0.95,
+      "max_train_violation_rate": 0.02,
+      "min_mode_confidence": 0.7,
+      "hard_guard_categories": [
+        "catastrophic_actuator_release"
+      ],
+      "soft_guard_categories": [
+        "value_envelope",
+        "no_backtrack"
+      ],
+      "flush_on_hard_guard": true
+    },
+    "speed_envelope": {
+      "enable": false,
+      "shadow_mode": true,
+      "percentile_low": 0.005,
+      "percentile_high": 0.995,
+      "mode_conditioned": true,
+      "max_consecutive_clamps": 3,
+      "flush_after_repeated_clamp": true
+    },
+    "sync": {
+      "enable": true,
+      "require_chunk_id": true,
+      "flush_on_reject": true,
+      "flush_on_rescue": true,
+      "flush_on_hard_clamp": true,
+      "flush_on_repeated_speed_clamp": true,
+      "block_execution_until_fresh_chunk": true
+    },
+    "trace": {
+      "enable": true,
+      "record_images": false,
+      "record_raw_chunks": true,
+      "record_postprocessed_chunks": true,
+      "record_executed_actions": true,
+      "record_mode_estimates": true,
+      "record_rescue_neighbors": false
+    }
+  }
+}

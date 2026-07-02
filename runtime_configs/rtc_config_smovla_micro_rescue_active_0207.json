@@ -91,7 +91,7 @@
       "tracking_monitor_window_steps": 45,
       "tracking_monitor_state_radius": 18.0,
       "tracking_monitor_min_path_length": 0.0,
-      "tracking_monitor_cooldown_steps": 45,
+      "tracking_monitor_cooldown_steps": 75,
       "tracking_monitor_dims": [
         0,
         1,
@@ -113,8 +113,8 @@
       "blend_alpha": 1.0,
       "min_future_progress_score": 0.2,
       "max_state_distance": null,
-      "cooldown_s": 2.0,
-      "max_rescues_per_episode": 3
+      "cooldown_s": 7.0,
+      "max_rescues_per_episode": 5
     },
     "invariant_guard": {
       "enable": false,

@@ -1104,6 +1104,7 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
                 "chunk_id": envelope.chunk_id if envelope is not None else None,
                 "inference_id": envelope.inference_id if envelope is not None else None,
                 "harness_decision": asdict(envelope.harness_decision) if envelope is not None else {},
+                "rescue_metadata": rescue_metadata or {},
                 "invariant_violations": [asdict(item) for item in invariant_violations],
                 "envelope_violations": [asdict(item) for item in envelope_violations],
             },

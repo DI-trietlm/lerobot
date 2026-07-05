@@ -404,6 +404,11 @@ class RTCControlGUI(tk.Tk):
                     "bool",
                     ("true", "false"),
                 ),
+                _FieldSpec("harness_client_tracking_monitor_window_steps", "Tracking Window Steps", "45", "int"),
+                _FieldSpec("harness_client_tracking_monitor_state_radius", "Tracking State Radius", "18.0", "float"),
+                _FieldSpec("harness_client_tracking_monitor_min_path_length", "Tracking Min Path Length", "0.0", "float"),
+                _FieldSpec("harness_client_tracking_monitor_cooldown_steps", "Tracking Cooldown Steps", "45", "int"),
+                _FieldSpec("harness_client_tracking_monitor_dims", "Tracking Dims (JSON list)", "[0,1,2,3,4]", "json_list"),
                 _FieldSpec("harness_client_clear_queue_on_intervention", "Client Clear Queue On Intervention", "true", "bool", ("true", "false")),
                 _FieldSpec("harness_client_request_reinfer_on_intervention", "Client Request Re-Infer", "true", "bool", ("true", "false")),
                 _FieldSpec("harness_micro_rescue_shadow_mode", "Micro-Rescue Shadow", "true", "bool", ("true", "false")),
@@ -413,6 +418,8 @@ class RTCControlGUI(tk.Tk):
                 _FieldSpec("harness_micro_rescue_snippet_horizon_steps", "Micro-Rescue Horizon Steps", "8", "int"),
                 _FieldSpec("harness_micro_rescue_max_duration_s", "Micro-Rescue Max Duration (s)", "1.0", "float"),
                 _FieldSpec("harness_micro_rescue_blend_alpha", "Micro-Rescue Blend Alpha", "1.0", "float"),
+                _FieldSpec("harness_micro_rescue_ramp_in_steps", "Micro-Rescue Ramp-In Steps", "0", "int"),
+                _FieldSpec("harness_micro_rescue_ramp_in_max_joint_delta", "Micro-Rescue Ramp Max Joint Delta", "", "optional_float"),
                 _FieldSpec("harness_micro_rescue_min_future_progress_score", "Micro-Rescue Min Future Progress", "0.2", "float"),
                 _FieldSpec("harness_micro_rescue_max_state_distance", "Micro-Rescue Max Distance (optional)", "", "optional_float"),
                 _FieldSpec("harness_micro_rescue_cooldown_s", "Micro-Rescue Cooldown (s)", "2.0", "float"),
@@ -737,6 +744,21 @@ class RTCControlGUI(tk.Tk):
         )
         cfg.client.speed_envelope_enable = self._parse_bool("harness_client_speed_envelope_enable")
         cfg.client.tracking_monitor_enable = self._parse_bool("harness_client_tracking_monitor_enable")
+        cfg.client.tracking_monitor_window_steps = self._parse_int(
+            "harness_client_tracking_monitor_window_steps"
+        )
+        cfg.client.tracking_monitor_state_radius = self._parse_float(
+            "harness_client_tracking_monitor_state_radius"
+        )
+        cfg.client.tracking_monitor_min_path_length = self._parse_float(
+            "harness_client_tracking_monitor_min_path_length"
+        )
+        cfg.client.tracking_monitor_cooldown_steps = self._parse_int(
+            "harness_client_tracking_monitor_cooldown_steps"
+        )
+        cfg.client.tracking_monitor_dims = [
+            int(item) for item in self._parse_list_like("harness_client_tracking_monitor_dims")
+        ]
         cfg.client.clear_queue_on_intervention = self._parse_bool(
             "harness_client_clear_queue_on_intervention"
         )
@@ -754,6 +776,10 @@ class RTCControlGUI(tk.Tk):
         )
         cfg.micro_rescue.max_duration_s = self._parse_float("harness_micro_rescue_max_duration_s")
         cfg.micro_rescue.blend_alpha = self._parse_float("harness_micro_rescue_blend_alpha")
+        cfg.micro_rescue.ramp_in_steps = self._parse_int("harness_micro_rescue_ramp_in_steps")
+        cfg.micro_rescue.ramp_in_max_joint_delta = self._parse_optional_float(
+            "harness_micro_rescue_ramp_in_max_joint_delta"
+        )
         cfg.micro_rescue.min_future_progress_score = self._parse_float(
             "harness_micro_rescue_min_future_progress_score"
         )
